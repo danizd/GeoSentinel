@@ -17,10 +17,10 @@ def seed_test_data(db: Session = Depends(get_db)):
     existing = db.query(SourcesMetadata).first()
     if not existing:
         sources = [
-            SourcesMetadata(source="gdelt", display_name="GDELT", independence_class="media_derived"),
-            SourcesMetadata(source="usgs", display_name="USGS Earthquake", independence_class="sensor"),
-            SourcesMetadata(source="firms", display_name="FIRMS NASA", independence_class="sensor"),
-            SourcesMetadata(source="acled", display_name="ACLED", independence_class="field_reported"),
+            SourcesMetadata(source="gdelt", display_name="GDELT Cloud Events v2", independence_class="media_derived"),
+            SourcesMetadata(source="usgs", display_name="USGS Earthquake Hazards", independence_class="sensor"),
+            SourcesMetadata(source="firms", display_name="FIRMS NASA (VIIRS/MODIS)", independence_class="sensor"),
+            SourcesMetadata(source="acled", display_name="ACLED (CC BY-NC 4.0)", independence_class="field_reported"),
         ]
         db.add_all(sources)
         db.commit()

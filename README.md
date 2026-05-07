@@ -72,6 +72,9 @@ Crea un archivo `.env` en la raiz del proyecto (nunca commitear):
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/geosentinel
 FIRMS_MAP_KEY=tu_api_key_aqui
+GDELT_API_KEY=tu_gdelt_api_key
+ACLED_API_KEY=tu_acled_api_key
+ACLED_EMAIL=tu_email_registrado_en_acled
 ```
 
 Carga el `.env` antes de ejecutar cualquier comando:
@@ -265,6 +268,52 @@ Session = sessionmaker(bind=engine)
 with Session() as session:
     ingestor = FIRMSIngestor()
     result = ingestor.poll(session, bbox=(-10.0, 35.0, 5.0, 45.0), days=1)
+    print(result)
+"
+```
+
+### Ingestor GDELT (conflictos, cada 5 min)
+
+Requiere `GDELT_API_KEY`. Descarga eventos de conflicto de los ultimos 5 minutos:
+
+```bash
+uv run python -c "
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from ingestors.gdelt_ingestor import GDELTIngestor
+
+engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
+Session = sessionmaker(bind=engine)
+
+with Session() as session:
+    ingestor = GDELTIngestor()
+    result = ingestor.run(session)
+    print(result)
+"
+```
+
+### Ingestor ACLED (conflictos estructurados, batch diario)
+
+Requiere `ACLED_API_KEY` y `ACLED_EMAIL`. Descarga las ultimas 48h (incluye actualizaciones retroactivas).
+Para backfill de una fecha concreta usar `since_date`:
+
+```bash
+uv run python -c "
+import os
+from datetime import datetime, timezone
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from ingestors.acled_ingestor import ACLEDIngestor
+
+engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
+Session = sessionmaker(bind=engine)
+
+with Session() as session:
+    ingestor = ACLEDIngestor()
+    # Backfill desde una fecha especifica
+    since = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    result = ingestor.run(session, since_date=since)
     print(result)
 "
 ```
