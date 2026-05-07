@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, DateTime, Float, Index, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Boolean, DateTime, Float, Index, String, Text, text
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from . import Base
@@ -24,5 +24,5 @@ class Aoi(Base):
 
     __table_args__ = (
         Index("ix_aoi_geometry", "geometry", postgresql_using="gist"),
-        Index("ix_aoi_is_active", "is_active", postgresql_where=(Aoi.is_active == True)),
+        Index("ix_aoi_is_active", "is_active", postgresql_where=text("is_active = true")),
     )
