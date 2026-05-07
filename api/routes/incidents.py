@@ -2,11 +2,15 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, func, select
+from geoalchemy2.functions import ST_GeomFromText, ST_Intersects, ST_MakeEnvelope, ST_Within
+from sqlalchemy import and_, cast, func, select
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.orm import Session
+from sqlalchemy.types import Text
 
 from api.schemas.incidents import IncidentFilters, IncidentListResponse, IncidentPoint, IncidentResponse
 from api.database import get_db
+from models.aoi import Aoi
 from models.incidents import Incident
 
 router = APIRouter()
@@ -34,55 +38,82 @@ def list_incidents(
     aoi_id: Optional[UUID] = Query(None),
     db: Session = Depends(get_db),
 ) -> IncidentListResponse:
-    query = select(Incident)
+    try:
+        query = select(Incident)
 
-    status_list = status.split(",") if status else ["open", "updated"]
-    if not include_fp:
-        status_list = [s for s in status_list if s != "false_positive"]
+        status_list = status.split(",") if status else ["open", "updated"]
+        if not include_fp:
+            status_list = [s for s in status_list if s != "false_positive"]
 
-    filters = [Incident.status.in_(status_list)]
+        filters = [Incident.status.in_(status_list)]
 
-    if category:
-        filters.append(Incident.category == category)
-    if since:
-        filters.append(Incident.last_seen >= since)
-    if min_severity is not None:
-        filters.append(Incident.severity_max >= min_severity)
-    if min_confidence is not None:
-        filters.append(Incident.confidence >= min_confidence)
-    if sources:
-        source_list = sources.split(",")
-        filters.append(Incident.source.any(source_list))
+        if category:
+            filters.append(Incident.category == category)
+        if since:
+            filters.append(Incident.last_seen >= since)
+        if min_severity is not None:
+            filters.append(Incident.severity_max >= min_severity)
+        if min_confidence is not None:
+            filters.append(Incident.confidence >= min_confidence)
+        if bbox:
+            parts = bbox.split(",")
+            if len(parts) == 4:
+                lon_min, lat_min, lon_max, lat_max = (float(p) for p in parts)
+                envelope = ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326)
+                filters.append(
+                    Incident.canonical_point.isnot(None),
+                )
+                filters.append(
+                    ST_Within(ST_GeomFromText(Incident.canonical_point, 4326), envelope)
+                )
+        if sources:
+            source_list = [s.strip() for s in sources.split(",") if s.strip()]
+            if source_list:
+                filters.append(Incident.sources.overlap(cast(source_list, PG_ARRAY(Text))))
+        if aoi_id:
+            aoi = db.get(Aoi, aoi_id)
+            if aoi:
+                filters.append(Incident.canonical_point.isnot(None))
+                filters.append(
+                    ST_Intersects(
+                        ST_GeomFromText(Incident.canonical_point, 4326),
+                        aoi.geometry,
+                    )
+                )
 
-    query = query.where(and_(*filters))
+        query = query.where(and_(*filters))
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total = db.execute(count_query).scalar() or 0
+        count_result = db.execute(select(func.count()).select_from(Incident).where(and_(*filters))).scalar()
+        total = count_result or 0
 
-    offset = (page - 1) * limit
-    query = query.offset(offset).limit(limit)
+        offset = (page - 1) * limit
+        query = query.offset(offset).limit(limit)
 
-    results = db.execute(query).scalars().all()
+        results = db.execute(query).scalars().all()
 
-    incidents = []
-    for inc in results:
-        incidents.append(IncidentResponse(
-            incident_id=inc.incident_id,
-            status=inc.status,
-            category=inc.category,
-            event_type=inc.event_type,
-            canonical_point=parse_wkt_point(inc.canonical_point) if inc.canonical_point else None,
-            first_seen=inc.first_seen,
-            last_seen=inc.last_seen,
-            severity_max=inc.severity_max,
-            severity_latest=inc.severity_latest,
-            confidence=inc.confidence,
-            fatalities_total=inc.fatalities_total,
-            sources=inc.sources,
-            observation_count=inc.observation_count,
-        ))
+        incidents = []
+        for inc in results:
+            incidents.append(IncidentResponse(
+                incident_id=inc.incident_id,
+                status=inc.status,
+                category=inc.category,
+                event_type=inc.event_type,
+                canonical_point=parse_wkt_point(inc.canonical_point) if inc.canonical_point else None,
+                first_seen=inc.first_seen,
+                last_seen=inc.last_seen,
+                severity_max=inc.severity_max,
+                severity_latest=inc.severity_latest,
+                confidence=inc.confidence,
+                fatalities_total=inc.fatalities_total,
+                sources=inc.sources,
+                observation_count=inc.observation_count,
+            ))
 
-    return IncidentListResponse(total=total, page=page, incidents=incidents)
+        return IncidentListResponse(total=total, page=page, incidents=incidents)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error listing incidents: {e}")
+        return IncidentListResponse(total=0, page=page, incidents=[])
 
 
 @router.get("/incidents/{incident_id}")

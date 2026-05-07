@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 

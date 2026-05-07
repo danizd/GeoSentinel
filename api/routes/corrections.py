@@ -33,13 +33,18 @@ def create_correction(data: CorrectionCreate, db: Session = Depends(get_db)) -> 
 
     corrected_by = "operator"
 
+    needs_manual_audit = True
+
     if data.correction_type == "false_positive":
         transition_to_false_positive(db, incident, corrected_by, data.reason)
+        needs_manual_audit = False
     elif data.correction_type == "close":
         transition_to_closed(db, incident, corrected_by, data.reason)
+        needs_manual_audit = False
     elif data.correction_type == "reclassify":
         if incident.status == "false_positive":
             resolve_false_positive(db, incident, corrected_by, data.reason)
+            needs_manual_audit = False
         else:
             if data.new_category:
                 incident.category = data.new_category
@@ -77,17 +82,25 @@ def create_correction(data: CorrectionCreate, db: Session = Depends(get_db)) -> 
         "canonical_point": incident.canonical_point,
     }
 
-    correction = CorrectionsAudit(
-        incident_id=incident.incident_id,
-        corrected_by=corrected_by,
-        correction_type=data.correction_type,
-        before_state=before_state,
-        after_state=after_state,
-        reason=data.reason,
-    )
-    db.add(correction)
-    db.commit()
-    db.refresh(correction)
+    if needs_manual_audit:
+        correction = CorrectionsAudit(
+            incident_id=incident.incident_id,
+            corrected_by=corrected_by,
+            correction_type=data.correction_type,
+            before_state=before_state,
+            after_state=after_state,
+            reason=data.reason,
+        )
+        db.add(correction)
+        db.commit()
+        db.refresh(correction)
+    else:
+        correction = (
+            db.query(CorrectionsAudit)
+            .filter(CorrectionsAudit.incident_id == incident.incident_id)
+            .order_by(CorrectionsAudit.created_at.desc())
+            .first()
+        )
 
     return CorrectionResponse(
         correction_id=correction.correction_id,

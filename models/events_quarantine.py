@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -13,7 +13,7 @@ class EventsQuarantine(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String, nullable=False)
     raw_payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    ingest_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    ingest_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     rejection_code: Mapped[str] = mapped_column(
         String, nullable=False, comment="'INVALID_COORDS','FUTURE_DATE','NULL_REQUIRED','SCHEMA_ERROR'"
     )

@@ -13,17 +13,17 @@ USGS_TYPE_MAP = {
 }
 
 SEVERITY_MAGNITUDE_MAP = {
-    (0, 4.9): 2.0,
-    (5.0, 5.9): 4.0,
-    (6.0, 6.9): 6.0,
-    (7.0, 7.9): 8.0,
-    (8.0, float("inf")): 10.0,
+    (0, 4.0): 1.0,
+    (4.0, 5.0): 3.5,
+    (5.0, 6.0): 5.5,
+    (6.0, 7.0): 7.5,
+    (7.0, float("inf")): 10.0,
 }
 
 
 def _normalize_severity(magnitude: float) -> float:
     for (low, high), severity in SEVERITY_MAGNITUDE_MAP.items():
-        if low <= magnitude <= high:
+        if low <= magnitude < high:
             return severity
     return 1.0
 

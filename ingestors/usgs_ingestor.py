@@ -79,7 +79,7 @@ class USGSIngestor:
             logger.error("USGS request timeout")
             raise
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 429:
+            if e.response is not None and e.response.status_code == 429:
                 logger.warning("USGS rate limited (429)")
                 raise
             logger.error(f"USGS HTTP error: {e}")
@@ -112,6 +112,9 @@ class USGSIngestor:
             except requests.exceptions.HTTPError as e:
                 if e.response and e.response.status_code == 429:
                     attempt += 1
+                    if attempt >= self.max_retries:
+                        logger.error("Max retries reached for USGS fetch (rate limited)")
+                        raise
                     wait_time = self._calculate_backoff(attempt)
                     logger.warning(f"Rate limited, retrying in {wait_time}s (attempt {attempt})")
                     time.sleep(wait_time)

@@ -25,8 +25,6 @@ def process_and_upsert_event(
 
     if existing:
         existing.ingest_time = datetime.now(timezone.utc)
-        if event.raw_payload:
-            pass
         session.commit()
         return {"duplicate": True, "id": existing.id}
 

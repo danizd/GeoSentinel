@@ -15,11 +15,10 @@ FIRMS_TYPE_MAP = {
 FIRMS_CONFIDENCE_FILTER = {"nominal", "high"}
 
 SEVERITY_FRP_MAP = {
-    (0, 5): 1.0,
-    (5, 10): 2.5,
-    (10, 25): 5.0,
-    (25, 50): 7.5,
-    (50, float("inf")): 10.0,
+    (0, 50): 2.0,
+    (50, 200): 4.0,
+    (200, 1000): 6.5,
+    (1000, float("inf")): 9.0,
 }
 
 LOCATION_ACCURACY = {
@@ -77,8 +76,6 @@ def normalize_firms_row(row: dict[str, Any], product: str = "VIIRS_SNPP_NRT") ->
     ]
     if row.get("brightness"):
         source_refs.append(f"brightness: {row['brightness']}K")
-
-    product_short = product.split("_")[1] if "_" in product else product
 
     return EventCanonicalCreate(
         event_id_source=event_id_source,

@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import incidents, aoi, corrections, health
+from api.routes import incidents, aoi, corrections, health, seed
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/v1", tags=["health"])
+app.include_router(seed.router, prefix="/v1", tags=["seed"])
 app.include_router(incidents.router, prefix="/v1", tags=["incidents"])
 app.include_router(aoi.router, prefix="/v1", tags=["aoi"])
 app.include_router(corrections.router, prefix="/v1", tags=["corrections"])

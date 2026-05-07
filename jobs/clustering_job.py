@@ -120,8 +120,13 @@ def compute_confidence(events: list[EventsCanonical]) -> float:
         factor = INDEPENDENCE_FACTORS.get(source_class, 0.5)
 
         if source_class == "media_derived":
-            cycle_hour = event.event_time.replace(minute=0, second=0, microsecond=0)
-            cycle_key = f"{event.source}:{cycle_hour.isoformat()}"
+            cycle_window = event.event_time.replace(
+                hour=(event.event_time.hour // 6) * 6,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            cycle_key = f"{event.source}:{cycle_window.isoformat()}"
             if cycle_key in seen_media_cycle:
                 factor *= 0.1
             seen_media_cycle.add(cycle_key)
@@ -221,6 +226,17 @@ def assign_event_to_incident(session: Session, event: EventsCanonical, incident:
     incident.last_seen = max(incident.last_seen, event.event_time) if incident.last_seen else event.event_time
     incident.last_updated = datetime.now(timezone.utc)
     incident.severity_latest = event.severity
+    incident.severity_max = max(incident.severity_max or 0.0, event.severity)
+    incident.fatalities_total = max(incident.fatalities_total or 0, event.fatalities or 0)
+
+    linked_events = session.execute(
+        select(EventsCanonical).where(EventsCanonical.id.in_(event_linked_ids))
+    ).scalars().all()
+
+    if linked_events:
+        new_lat, new_lon = compute_canonical_point(linked_events)
+        incident.canonical_point = f"POINT({new_lon} {new_lat})"
+        incident.confidence = compute_confidence(linked_events)
 
     transition_to_updated(session, incident)
 
@@ -240,7 +256,7 @@ def create_new_incident(session: Session, event: EventsCanonical) -> Incident:
         admin1=event.admin1,
         status="open",
         status_changed_at=now,
-        canonical_point=f"POINT({event.location_point.coords[0]} {event.location_point.coords[1]})",
+        canonical_point=f"POINT({_parse_geometry_coords(event.location_point)[1]} {_parse_geometry_coords(event.location_point)[0]})",
         canonical_geometry=None,
         severity_max=event.severity,
         severity_latest=event.severity,
@@ -256,7 +272,6 @@ def create_new_incident(session: Session, event: EventsCanonical) -> Incident:
     session.commit()
     session.refresh(incident)
 
-    event_linked_ids = event.raw_event_id
     logger.info(f"Created new incident {incident.incident_id} for event {event.id}")
 
     return incident
@@ -275,7 +290,7 @@ def fetch_active_incidents(session: Session, category: str) -> list[Incident]:
         select(Incident)
         .where(
             Incident.category == category,
-            Incident.status.in_(["open", "updated"]),
+            Incident.status.in_(["open", "updated", "stale"]),
         )
     ).scalars().all()
 

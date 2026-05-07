@@ -2,6 +2,9 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from geoalchemy2.functions import ST_GeomFromText, ST_Intersects
+from geoalchemy2.shape import to_shape
+from shapely.geometry import mapping
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -14,7 +17,7 @@ from models.incidents import Incident
 router = APIRouter()
 
 
-def geojson_to_wkt(geometry: dict) -> str:
+def geojson_to_wkt(geometry: dict) -> str | None:
     geom_type = geometry.get("type", "").lower()
     coords = geometry.get("coordinates", [])
 
@@ -30,6 +33,14 @@ def geojson_to_wkt(geometry: dict) -> str:
             polygons.append(f"({points})")
         return f"MULTIPOLYGON({','.join(polygons)})"
     return None
+
+
+def wkb_to_geojson(geometry) -> dict:
+    try:
+        shape = to_shape(geometry)
+        return mapping(shape)
+    except Exception:
+        return {"type": "Unknown", "coordinates": []}
 
 
 @router.post("/aoi", response_model=AoiResponse, status_code=201)
@@ -87,7 +98,7 @@ def list_aois(
             aoi_id=a.aoi_id,
             name=a.name,
             description=a.description,
-            geometry={"type": "Geometry", "coordinates": []},
+            geometry=wkb_to_geojson(a.geometry),
             categories=a.categories,
             min_severity=a.min_severity,
             is_active=a.is_active,
@@ -108,7 +119,7 @@ def get_aoi(aoi_id: UUID, db: Session = Depends(get_db)) -> AoiResponse:
         aoi_id=aoi.aoi_id,
         name=aoi.name,
         description=aoi.description,
-        geometry={"type": "Geometry", "coordinates": []},
+        geometry=wkb_to_geojson(aoi.geometry),
         categories=aoi.categories,
         min_severity=aoi.min_severity,
         is_active=aoi.is_active,
@@ -145,7 +156,7 @@ def update_aoi(aoi_id: UUID, data: AoiUpdate, db: Session = Depends(get_db)) -> 
         aoi_id=aoi.aoi_id,
         name=aoi.name,
         description=aoi.description,
-        geometry={"type": "Geometry", "coordinates": []},
+        geometry=wkb_to_geojson(aoi.geometry),
         categories=aoi.categories,
         min_severity=aoi.min_severity,
         is_active=aoi.is_active,
@@ -177,17 +188,26 @@ def get_aoi_incidents(
     if not aoi:
         raise HTTPException(status_code=404, detail="AOI not found")
 
-    query = select(Incident).where(
-        Incident.status.in_(["open", "updated"]),
+    spatial_filter = ST_Intersects(
+        ST_GeomFromText(Incident.canonical_point, 4326),
+        aoi.geometry,
     )
 
-    count_query = select(func.count()).select_from(query.subquery())
+    base_filter = and_(
+        Incident.status.in_(["open", "updated"]),
+        Incident.canonical_point.isnot(None),
+        spatial_filter,
+    )
+
+    count_query = select(func.count()).select_from(Incident).where(base_filter)
     total = db.execute(count_query).scalar() or 0
 
     offset = (page - 1) * limit
-    query = query.offset(offset).limit(limit)
+    query = select(Incident).where(base_filter).offset(offset).limit(limit)
 
     results = db.execute(query).scalars().all()
+
+    from api.routes.incidents import parse_wkt_point
 
     incidents = []
     for inc in results:
@@ -196,7 +216,7 @@ def get_aoi_incidents(
             status=inc.status,
             category=inc.category,
             event_type=inc.event_type,
-            canonical_point=IncidentPoint(lon=0, lat=0) if inc.canonical_point else None,
+            canonical_point=parse_wkt_point(inc.canonical_point) if inc.canonical_point else None,
             first_seen=inc.first_seen,
             last_seen=inc.last_seen,
             severity_max=inc.severity_max,

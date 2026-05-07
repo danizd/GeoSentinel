@@ -20,11 +20,10 @@ INVALID_TRANSITIONS = {
 
 
 def transition_to_open(session: Session, incident: Incident, reason: str | None = None) -> Incident:
-    if incident.status in INVALID_TRANSITIONS.get("closed", []):
+    if "open" in INVALID_TRANSITIONS.get(incident.status, []):
         raise ValueError(f"Invalid transition from {incident.status} to open")
-    if incident.status in INVALID_TRANSITIONS.get("false_positive", []):
-        if reason != "operator_reversion" and incident.status == "false_positive":
-            raise ValueError(f"Invalid transition from false_positive to open without operator reversion")
+    if incident.status == "false_positive" and reason != "operator_reversion":
+        raise ValueError(f"Invalid transition from false_positive to open without operator reversion")
 
     incident.status = "open"
     incident.status_changed_at = datetime.now(timezone.utc)
