@@ -55,10 +55,11 @@ class USGSIngestor:
         return session
 
     def _build_url(self, starttime: datetime, endtime: datetime) -> str:
+        fmt = "%Y-%m-%dT%H:%M:%S"
         return (
             f"{USGS_BASE_URL}?format=geojson"
-            f"&starttime={starttime.isoformat()}"
-            f"&endtime={endtime.isoformat()}"
+            f"&starttime={starttime.strftime(fmt)}"
+            f"&endtime={endtime.strftime(fmt)}"
             f"&minmagnitude={self.min_magnitude}"
         )
 
@@ -92,9 +93,10 @@ class USGSIngestor:
         backoff = self.backoff_base**attempt
         return min(backoff, self.backoff_max)
 
-    def run(self, db_session, process_callback=None) -> dict[str, Any]:
+    def run(self, db_session, process_callback=None, lookback_hours: int | None = None) -> dict[str, Any]:
         endtime = datetime.now(timezone.utc)
-        starttime = endtime - timedelta(minutes=5)
+        lookback = timedelta(hours=lookback_hours) if lookback_hours else timedelta(minutes=5)
+        starttime = endtime - lookback
 
         attempt = 0
         while attempt < self.max_retries:

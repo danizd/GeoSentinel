@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from geoalchemy2.functions import ST_GeomFromText, ST_Intersects, ST_MakeEnvelope, ST_Within
+from geoalchemy2.functions import ST_AsText, ST_GeomFromText, ST_Intersects, ST_MakeEnvelope, ST_Within
 from sqlalchemy import and_, cast, func, select
 from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.orm import Session
@@ -38,97 +38,90 @@ def list_incidents(
     aoi_id: Optional[UUID] = Query(None),
     db: Session = Depends(get_db),
 ) -> IncidentListResponse:
-    try:
-        query = select(Incident)
+    status_list = status.split(",") if status else ["open", "updated"]
+    if not include_fp:
+        status_list = [s for s in status_list if s != "false_positive"]
 
-        status_list = status.split(",") if status else ["open", "updated"]
-        if not include_fp:
-            status_list = [s for s in status_list if s != "false_positive"]
+    filters = [Incident.status.in_(status_list)]
 
-        filters = [Incident.status.in_(status_list)]
+    if category:
+        filters.append(Incident.category == category)
+    if since:
+        filters.append(Incident.last_seen >= since)
+    if min_severity is not None:
+        filters.append(Incident.severity_max >= min_severity)
+    if min_confidence is not None:
+        filters.append(Incident.confidence >= min_confidence)
+    if bbox:
+        parts = bbox.split(",")
+        if len(parts) == 4:
+            lon_min, lat_min, lon_max, lat_max = (float(p) for p in parts)
+            envelope = ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326)
+            filters.append(Incident.canonical_point.isnot(None))
+            filters.append(ST_Within(Incident.canonical_point, envelope))
+    if sources:
+        source_list = [s.strip() for s in sources.split(",") if s.strip()]
+        if source_list:
+            filters.append(Incident.sources.overlap(cast(source_list, PG_ARRAY(Text))))
+    if aoi_id:
+        aoi = db.get(Aoi, aoi_id)
+        if aoi:
+            filters.append(Incident.canonical_point.isnot(None))
+            filters.append(ST_Intersects(Incident.canonical_point, aoi.geometry))
 
-        if category:
-            filters.append(Incident.category == category)
-        if since:
-            filters.append(Incident.last_seen >= since)
-        if min_severity is not None:
-            filters.append(Incident.severity_max >= min_severity)
-        if min_confidence is not None:
-            filters.append(Incident.confidence >= min_confidence)
-        if bbox:
-            parts = bbox.split(",")
-            if len(parts) == 4:
-                lon_min, lat_min, lon_max, lat_max = (float(p) for p in parts)
-                envelope = ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326)
-                filters.append(
-                    Incident.canonical_point.isnot(None),
-                )
-                filters.append(
-                    ST_Within(ST_GeomFromText(Incident.canonical_point, 4326), envelope)
-                )
-        if sources:
-            source_list = [s.strip() for s in sources.split(",") if s.strip()]
-            if source_list:
-                filters.append(Incident.sources.overlap(cast(source_list, PG_ARRAY(Text))))
-        if aoi_id:
-            aoi = db.get(Aoi, aoi_id)
-            if aoi:
-                filters.append(Incident.canonical_point.isnot(None))
-                filters.append(
-                    ST_Intersects(
-                        ST_GeomFromText(Incident.canonical_point, 4326),
-                        aoi.geometry,
-                    )
-                )
+    where_clause = and_(*filters)
 
-        query = query.where(and_(*filters))
+    count_result = db.execute(
+        select(func.count()).select_from(Incident).where(where_clause)
+    ).scalar()
+    total = count_result or 0
 
-        count_result = db.execute(select(func.count()).select_from(Incident).where(and_(*filters))).scalar()
-        total = count_result or 0
+    offset = (page - 1) * limit
+    rows = db.execute(
+        select(Incident, ST_AsText(Incident.canonical_point))
+        .where(where_clause)
+        .offset(offset)
+        .limit(limit)
+    ).all()
 
-        offset = (page - 1) * limit
-        query = query.offset(offset).limit(limit)
+    incidents = []
+    for inc, point_wkt in rows:
+        incidents.append(IncidentResponse(
+            incident_id=inc.incident_id,
+            status=inc.status,
+            category=inc.category,
+            event_type=inc.event_type,
+            canonical_point=parse_wkt_point(point_wkt) if point_wkt else None,
+            first_seen=inc.first_seen,
+            last_seen=inc.last_seen,
+            severity_max=inc.severity_max,
+            severity_latest=inc.severity_latest,
+            confidence=inc.confidence,
+            fatalities_total=inc.fatalities_total,
+            sources=inc.sources,
+            observation_count=inc.observation_count,
+        ))
 
-        results = db.execute(query).scalars().all()
-
-        incidents = []
-        for inc in results:
-            incidents.append(IncidentResponse(
-                incident_id=inc.incident_id,
-                status=inc.status,
-                category=inc.category,
-                event_type=inc.event_type,
-                canonical_point=parse_wkt_point(inc.canonical_point) if inc.canonical_point else None,
-                first_seen=inc.first_seen,
-                last_seen=inc.last_seen,
-                severity_max=inc.severity_max,
-                severity_latest=inc.severity_latest,
-                confidence=inc.confidence,
-                fatalities_total=inc.fatalities_total,
-                sources=inc.sources,
-                observation_count=inc.observation_count,
-            ))
-
-        return IncidentListResponse(total=total, page=page, incidents=incidents)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Error listing incidents: {e}")
-        return IncidentListResponse(total=0, page=page, incidents=[])
+    return IncidentListResponse(total=total, page=page, incidents=incidents)
 
 
 @router.get("/incidents/{incident_id}")
 def get_incident(incident_id: UUID, db: Session = Depends(get_db)) -> IncidentResponse:
-    incident = db.get(Incident, incident_id)
-    if not incident:
+    row = db.execute(
+        select(Incident, ST_AsText(Incident.canonical_point))
+        .where(Incident.incident_id == incident_id)
+    ).first()
+    if not row:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Incident not found")
 
+    incident, point_wkt = row
     return IncidentResponse(
         incident_id=incident.incident_id,
         status=incident.status,
         category=incident.category,
         event_type=incident.event_type,
-        canonical_point=parse_wkt_point(incident.canonical_point) if incident.canonical_point else None,
+        canonical_point=parse_wkt_point(point_wkt) if point_wkt else None,
         first_seen=incident.first_seen,
         last_seen=incident.last_seen,
         severity_max=incident.severity_max,
