@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -14,10 +15,11 @@ USGS_TYPE_MAP = {
 
 SEVERITY_MAGNITUDE_MAP = {
     (0, 4.0): 1.0,
-    (4.0, 5.0): 3.5,
-    (5.0, 6.0): 5.5,
-    (6.0, 7.0): 7.5,
-    (7.0, float("inf")): 10.0,
+    (4.0, 5.0): 2.0,
+    (5.0, 6.0): 4.0,
+    (6.0, 7.0): 6.0,
+    (7.0, 8.0): 8.0,
+    (8.0, float("inf")): 10.0,
 }
 
 
@@ -48,10 +50,19 @@ def normalize_usgs_event(usgs_feature: dict[str, Any]) -> EventCanonicalCreate:
     event_time = datetime.fromtimestamp(props.get("time", 0) / 1000, tz=timezone.utc)
 
     raw_event_type = props.get("type", "earthquake").lower()
-    event_type = USGS_TYPE_MAP.get(raw_event_type, "earthquake")
+    if raw_event_type in USGS_TYPE_MAP:
+        event_type = USGS_TYPE_MAP[raw_event_type]
+        category = _normalize_category(event_type)
+    else:
+        # Tipo desconocido: mantener "earthquake" por defecto pero categorizar
+        # como OTHER para no contaminar las metricas de desastres naturales.
+        event_type = "earthquake"
+        category = CategoryEnum.OTHER
 
     magnitude = props.get("mag", 0.0)
-    severity = _normalize_severity(magnitude)
+    # En la integracion se redondea hacia arriba para reflejar la magnitud
+    # observada por encima del umbral entero (e.g. mag 5.8 ~ severidad de 6).
+    severity = _normalize_severity(math.ceil(magnitude)) if magnitude else _normalize_severity(0)
     confidence = 8.0
 
     source_refs = []
@@ -67,7 +78,7 @@ def normalize_usgs_event(usgs_feature: dict[str, Any]) -> EventCanonicalCreate:
         source="usgs",
         event_time=event_time,
         event_type=event_type,
-        category=_normalize_category(event_type),
+        category=category,
         latitude=lat,
         longitude=lon,
         location_accuracy_km=props.get("horizontalError"),

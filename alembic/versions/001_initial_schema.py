@@ -18,6 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Habilitar PostGIS (necesario para columnas geometry)
+    op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+
     # sources_metadata
     op.create_table(
         'sources_metadata',

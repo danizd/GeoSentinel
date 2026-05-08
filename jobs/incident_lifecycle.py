@@ -43,7 +43,7 @@ def transition_to_updated(session: Session, incident: Incident) -> Incident:
 
 def transition_to_stale(session: Session, incident: Incident) -> Incident:
     if incident.status not in ["open", "updated"]:
-        raise ValueError(f"Cannot transition from {incident.status} to stale")
+        raise ValueError(f"Invalid transition from {incident.status} to stale")
 
     incident.status = "stale"
     incident.status_changed_at = datetime.now(timezone.utc)

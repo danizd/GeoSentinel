@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class CategoryEnum(str, Enum):
@@ -27,13 +27,17 @@ class Actor(BaseModel):
 
 
 class EventCanonicalCreate(BaseModel):
+    # NOTA: las restricciones de lat/lon, severity, confidence y event_type
+    # se aplican en la capa de validacion (validation.validator), no aqui,
+    # para que los eventos invalidos puedan llegar a quarantine en lugar de
+    # romper la construccion del schema.
     event_id_source: str
     source: str
     event_time: datetime
-    event_type: str
+    event_type: str | None = None
     category: CategoryEnum
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
+    latitude: float
+    longitude: float
     location_accuracy_km: float | None = None
     admin1: str | None = None
     admin2: str | None = None
@@ -50,13 +54,6 @@ class EventCanonicalCreate(BaseModel):
     is_confirmed: bool = False
     is_rumor: bool = False
     raw_payload: dict[str, Any] | None = None
-
-    @field_validator("event_type")
-    @classmethod
-    def event_type_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("event_type cannot be empty")
-        return v.strip()
 
 
 class EventQuarantineCreate(BaseModel):

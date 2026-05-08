@@ -71,23 +71,43 @@ class USGSIngestor:
         url = self._build_url(starttime, endtime)
         logger.info(f"Fetching USGS earthquakes: {url}")
 
-        try:
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("features", [])
-        except requests.exceptions.Timeout:
-            logger.error("USGS request timeout")
-            raise
-        except requests.exceptions.HTTPError as e:
-            if e.response is not None and e.response.status_code == 429:
-                logger.warning("USGS rate limited (429)")
+        attempt = 0
+        last_exc: Exception | None = None
+        while attempt < self.max_retries:
+            try:
+                response = self.session.get(url, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("features", [])
+            except requests.exceptions.Timeout as e:
+                last_exc = e
+                attempt += 1
+                if attempt >= self.max_retries:
+                    logger.error("USGS request timeout (max retries reached)")
+                    raise
+                wait_time = self._calculate_backoff(attempt)
+                logger.warning(f"USGS timeout, retrying in {wait_time}s (attempt {attempt})")
+                time.sleep(wait_time)
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    last_exc = e
+                    attempt += 1
+                    if attempt >= self.max_retries:
+                        logger.error("USGS rate limited (max retries reached)")
+                        raise
+                    wait_time = self._calculate_backoff(attempt)
+                    logger.warning(f"USGS rate limited, retrying in {wait_time}s (attempt {attempt})")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"USGS HTTP error: {e}")
+                    raise
+            except requests.exceptions.RequestException as e:
+                logger.error(f"USGS request failed: {e}")
                 raise
-            logger.error(f"USGS HTTP error: {e}")
-            raise
-        except requests.exceptions.RequestException as e:
-            logger.error(f"USGS request failed: {e}")
-            raise
+
+        if last_exc is not None:
+            raise last_exc
+        return []
 
     def _calculate_backoff(self, attempt: int) -> int:
         backoff = self.backoff_base**attempt

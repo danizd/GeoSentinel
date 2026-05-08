@@ -55,7 +55,9 @@ def create_correction(data: CorrectionCreate, db: Session = Depends(get_db)) -> 
         if data.new_coordinates:
             lon = data.new_coordinates.get("lon")
             lat = data.new_coordinates.get("lat")
-            if lon and lat:
+            if lon is not None and lat is not None:
+                if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+                    raise HTTPException(status_code=400, detail="Invalid coordinates")
                 incident.canonical_point = f"POINT({lon} {lat})"
                 db.commit()
     elif data.correction_type == "merge":

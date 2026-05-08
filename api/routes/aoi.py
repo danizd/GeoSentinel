@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from geoalchemy2.functions import ST_GeomFromText, ST_Intersects
+from geoalchemy2.functions import ST_AsText, ST_Intersects
 from geoalchemy2.shape import to_shape
 from shapely.geometry import mapping
 from sqlalchemy import and_, func, select
@@ -188,10 +188,7 @@ def get_aoi_incidents(
     if not aoi:
         raise HTTPException(status_code=404, detail="AOI not found")
 
-    spatial_filter = ST_Intersects(
-        ST_GeomFromText(Incident.canonical_point, 4326),
-        aoi.geometry,
-    )
+    spatial_filter = ST_Intersects(Incident.canonical_point, aoi.geometry)
 
     base_filter = and_(
         Incident.status.in_(["open", "updated"]),
@@ -203,20 +200,23 @@ def get_aoi_incidents(
     total = db.execute(count_query).scalar() or 0
 
     offset = (page - 1) * limit
-    query = select(Incident).where(base_filter).offset(offset).limit(limit)
-
-    results = db.execute(query).scalars().all()
+    rows = db.execute(
+        select(Incident, ST_AsText(Incident.canonical_point))
+        .where(base_filter)
+        .offset(offset)
+        .limit(limit)
+    ).all()
 
     from api.routes.incidents import parse_wkt_point
 
     incidents = []
-    for inc in results:
+    for inc, point_wkt in rows:
         incidents.append(IncidentResponse(
             incident_id=inc.incident_id,
             status=inc.status,
             category=inc.category,
             event_type=inc.event_type,
-            canonical_point=parse_wkt_point(inc.canonical_point) if inc.canonical_point else None,
+            canonical_point=parse_wkt_point(point_wkt) if point_wkt else None,
             first_seen=inc.first_seen,
             last_seen=inc.last_seen,
             severity_max=inc.severity_max,

@@ -1,1 +1,0 @@
-# tests for ingestors module

@@ -133,20 +133,31 @@ def compute_confidence(events: list[EventsCanonical]) -> float:
 
         score += factor
 
-    max_expected = 8.0
+    # Calibracion: una fuente sensor (factor 2.0) debe superar la confianza media (>5),
+    # dos sensores deben acercarse al maximo, y diez media_derived correlacionados
+    # deben quedar por debajo de dos field_reported (decision D3).
+    max_expected = 3.0
     return min(score * 10 / max_expected, 10.0)
 
 
 def _parse_geometry_coords(point) -> tuple[float, float]:
-    if hasattr(point, "coords"):
-        return point.coords[1], point.coords[0]
-    if hasattr(point, "wkt"):
-        wkt = point.wkt
-        if wkt.startswith("POINT("):
-            coords = wkt.replace("POINT(", "").replace(")", "").split()
-            return float(coords[1]), float(coords[0])
+    # Cadena WKT directa
     if isinstance(point, str) and point.startswith("POINT("):
         coords = point.replace("POINT(", "").replace(")", "").split()
+        return float(coords[1]), float(coords[0])
+    # Geometria Shapely o mock con coords=((lon, lat),)
+    coords_attr = getattr(point, "coords", None)
+    if coords_attr is not None:
+        try:
+            first = coords_attr[0]
+            if isinstance(first, (tuple, list)) and len(first) >= 2:
+                return float(first[1]), float(first[0])
+        except (IndexError, TypeError):
+            pass
+    # Geometria con atributo wkt
+    wkt = getattr(point, "wkt", None)
+    if isinstance(wkt, str) and wkt.startswith("POINT("):
+        coords = wkt.replace("POINT(", "").replace(")", "").split()
         return float(coords[1]), float(coords[0])
     return 0.0, 0.0
 

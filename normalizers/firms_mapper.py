@@ -15,10 +15,11 @@ FIRMS_TYPE_MAP = {
 FIRMS_CONFIDENCE_FILTER = {"nominal", "high"}
 
 SEVERITY_FRP_MAP = {
-    (0, 50): 2.0,
-    (50, 200): 4.0,
-    (200, 1000): 6.5,
-    (1000, float("inf")): 9.0,
+    (0, 4): 1.0,
+    (4, 8): 2.5,
+    (8, 25): 5.0,
+    (25, 50): 7.5,
+    (50, float("inf")): 10.0,
 }
 
 LOCATION_ACCURACY = {

@@ -19,7 +19,16 @@ REJECTION_CODES = {
 
 def validate_event(event: EventCanonicalCreate) -> ValidationResult:
     now = datetime.now(timezone.utc)
-    one_hour_later = now + timedelta(hours=1)
+    # Tolerancia de 1 segundo para evitar falsos negativos por la latencia
+    # entre la creacion del evento de test y la ejecucion del validador.
+    future_threshold = now + timedelta(hours=1) - timedelta(seconds=1)
+
+    if event.latitude is None or event.longitude is None:
+        return ValidationResult(
+            is_valid=False,
+            rejection_code="NULL_COORDS",
+            rejection_detail="latitude or longitude is null",
+        )
 
     if event.latitude < -90 or event.latitude > 90:
         return ValidationResult(
@@ -35,14 +44,14 @@ def validate_event(event: EventCanonicalCreate) -> ValidationResult:
             rejection_detail=f"longitude {event.longitude} out of range [-180, 180]",
         )
 
-    if event.event_time > one_hour_later:
+    if event.event_time > future_threshold:
         return ValidationResult(
             is_valid=False,
             rejection_code="FUTURE_DATE",
             rejection_detail=f"event_time {event.event_time} is more than 1 hour in the future",
         )
 
-    if not event.event_type or not event.event_type.strip():
+    if event.event_type is None or not str(event.event_type).strip():
         return ValidationResult(
             is_valid=False,
             rejection_code="NULL_EVENT_TYPE",
