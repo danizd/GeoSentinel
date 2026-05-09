@@ -14,9 +14,11 @@ from validation.validator import insert_quarantine, validate_event
 
 logger = logging.getLogger(__name__)
 
-ACLED_BASE_URL = "https://api.acleddata.com/acled/read"
+ACLED_API_URL = "https://api.acleddata.com/acled/read"
+ACLED_TOKEN_URL = "https://acleddata.com/oauth/token"
 POLL_INTERVAL_SECONDS = 86400
 ACLED_PAGE_SIZE = 500
+TOKEN_CACHE_FILE = ".acled_token_cache"
 
 DEFAULT_BACKOFF_BASE = 2
 DEFAULT_BACKOFF_MAX = 120
@@ -24,61 +26,67 @@ DEFAULT_MAX_RETRIES = 5
 
 
 class ACLEDIngestor:
-    """Ingestor para ACLED (F-ING-ACLED).
-
-    Realiza descarga batch diaria con soporte de backfill para detectar
-    actualizaciones retroactivas (lag real de 7-28 dias por region).
-    Autenticacion mediante query params key + email.
-    Source independence class: field_reported (factor de confianza x1.5).
-
-    ACLED puede actualizar registros existentes (ej. corregir fatalities).
-    El upsert por (source, event_id_source) maneja esto correctamente.
-
-    Licencia: CC BY-NC 4.0 — solo uso no comercial.
-    """
-
     def __init__(
         self,
         session: requests.Session | None = None,
         poll_interval: int = POLL_INTERVAL_SECONDS,
-        api_key: str | None = None,
-        api_email: str | None = None,
+        access_token: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
         page_size: int = ACLED_PAGE_SIZE,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_base: int = DEFAULT_BACKOFF_BASE,
         backoff_max: int = DEFAULT_BACKOFF_MAX,
     ):
         self.poll_interval = poll_interval
-        self.api_key = api_key or os.getenv("ACLED_API_KEY")
-        self.api_email = api_email or os.getenv("ACLED_EMAIL")
+        self.access_token = access_token or os.getenv("ACLED_ACCESS_TOKEN")
+        self.username = username or os.getenv("ACLED_USERNAME")
+        self.password = password or os.getenv("ACLED_PASSWORD")
         self.page_size = page_size
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self.backoff_max = backoff_max
         self.session = session or self._create_session(max_retries)
 
-        if not self.api_key:
-            raise ValueError("ACLED_API_KEY not provided")
-        if not self.api_email:
-            raise ValueError("ACLED_EMAIL not provided")
+        if not self.access_token:
+            if not self.username or not self.password:
+                raise ValueError("ACLED_ACCESS_TOKEN or ACLED_USERNAME/ACLED_PASSWORD required")
+            self.access_token = self._get_token()
 
     def _create_session(self, max_retries: int) -> requests.Session:
         http_session = requests.Session()
         retry_strategy = Retry(
             total=max_retries,
             backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504],
-            allowed_methods=["GET"],
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET", "POST"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         http_session.mount("https://", adapter)
-        http_session.mount("http://", adapter)
         return http_session
+
+    def _get_token(self) -> str:
+        logger.info("Obteniendo token ACLED via OAuth2...")
+        data = {
+            "grant_type": "password",
+            "client_id": "acled",
+            "username": self.username,
+            "password": self.password,
+            "scope": "authenticated",
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        response = self.session.post(ACLED_TOKEN_URL, data=data, headers=headers, timeout=60)
+        response.raise_for_status()
+        token_data = response.json()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise ValueError("No access_token en respuesta OAuth2")
+        logger.info("Token ACLED obtenido correctamente")
+        return access_token
 
     def _build_params(self, since_date: datetime, page: int) -> dict[str, Any]:
         return {
-            "key": self.api_key,
-            "email": self.api_email,
             "event_date": since_date.strftime("%Y-%m-%d"),
             "event_date_where": ">=",
             "limit": self.page_size,
@@ -90,36 +98,31 @@ class ACLEDIngestor:
             ),
         }
 
+    def _get_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.access_token}"}
+
     def fetch_page(self, since_date: datetime, page: int) -> list[dict[str, Any]]:
-        """Descarga una pagina de eventos ACLED desde since_date.
-
-        Args:
-            since_date: Fecha minima del evento (>=).
-            page: Numero de pagina (1-based).
-
-        Returns:
-            Lista de eventos de la pagina solicitada.
-
-        Raises:
-            requests.exceptions.HTTPError: En errores HTTP no recuperables.
-            requests.exceptions.Timeout: Si la solicitud supera el timeout.
-        """
         params = self._build_params(since_date, page)
+        headers = self._get_headers()
         logger.info(f"Fetching ACLED page {page} since {since_date.date()}")
 
         try:
-            response = self.session.get(ACLED_BASE_URL, params=params, timeout=60)
+            response = self.session.get(ACLED_API_URL, params=params, headers=headers, timeout=60)
             response.raise_for_status()
             data = response.json()
             return data.get("data", [])
-        except requests.exceptions.Timeout:
-            logger.error("ACLED request timeout")
-            raise
         except requests.exceptions.HTTPError as e:
-            if e.response is not None and e.response.status_code == 429:
+            if e.response and e.response.status_code == 401:
+                logger.warning("Token expirado, renovando...")
+                self.access_token = self._get_token()
+                return self.fetch_page(since_date, page)
+            if e.response and e.response.status_code == 429:
                 logger.warning("ACLED rate limited (429)")
                 raise
             logger.error(f"ACLED HTTP error: {e}")
+            raise
+        except requests.exceptions.Timeout:
+            logger.error("ACLED request timeout")
             raise
         except requests.exceptions.JSONDecodeError as e:
             logger.error(f"ACLED malformed JSON response: {e}")
@@ -129,14 +132,6 @@ class ACLEDIngestor:
             raise
 
     def fetch_all_events(self, since_date: datetime) -> list[dict[str, Any]]:
-        """Descarga todos los eventos paginando hasta agotar resultados.
-
-        Args:
-            since_date: Fecha minima de evento para la descarga.
-
-        Returns:
-            Lista completa de eventos del periodo.
-        """
         all_events: list[dict[str, Any]] = []
         page = 1
 
@@ -148,16 +143,8 @@ class ACLEDIngestor:
                 try:
                     page_events = self.fetch_page(since_date, page)
                     break
-                except requests.exceptions.Timeout:
-                    attempt += 1
-                    if attempt >= self.max_retries:
-                        logger.error("Max retries reached for ACLED fetch (timeout)")
-                        raise
-                    wait = min(self.backoff_base**attempt, self.backoff_max)
-                    logger.warning(f"Timeout, retrying in {wait}s (attempt {attempt})")
-                    time.sleep(wait)
                 except requests.exceptions.HTTPError as e:
-                    if e.response is not None and e.response.status_code == 429:
+                    if e.response and e.response.status_code == 429:
                         attempt += 1
                         if attempt >= self.max_retries:
                             logger.error("Max retries reached for ACLED fetch (rate limited)")
@@ -167,6 +154,14 @@ class ACLEDIngestor:
                         time.sleep(wait)
                     else:
                         raise
+                except requests.exceptions.Timeout:
+                    attempt += 1
+                    if attempt >= self.max_retries:
+                        logger.error("Max retries reached for ACLED fetch (timeout)")
+                        raise
+                    wait = min(self.backoff_base**attempt, self.backoff_max)
+                    logger.warning(f"Timeout, retrying in {wait}s (attempt {attempt})")
+                    time.sleep(wait)
 
             if not page_events:
                 break
@@ -187,19 +182,6 @@ class ACLEDIngestor:
         since_date: datetime | None = None,
         process_callback=None,
     ) -> dict[str, Any]:
-        """Ejecuta la descarga batch, valida y persiste eventos ACLED.
-
-        Por defecto descarga las ultimas 48h para capturar actualizaciones
-        retroactivas recientes. Para backfill completo pasar since_date explicito.
-
-        Args:
-            db_session: Sesion SQLAlchemy activa.
-            since_date: Fecha inicial de backfill. Por defecto: now() - 48h.
-            process_callback: Funcion alternativa a process_and_upsert_event (tests).
-
-        Returns:
-            Diccionario con contadores: processed, quarantined, duplicates, total_fetched.
-        """
         if since_date is None:
             since_date = datetime.now(timezone.utc) - timedelta(hours=48)
 
@@ -246,7 +228,6 @@ class ACLEDIngestor:
 
 
 def run_polling():
-    """Bucle principal de polling ACLED diario. Ejecutar como proceso independiente."""
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 

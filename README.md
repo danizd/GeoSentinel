@@ -1,7 +1,7 @@
 ﻿# GeoSentinel
 
 Sistema de agregacion y monitorizacion de incidentes geoespaciales en tiempo real.
-Agrega eventos de multiples fuentes (FIRMS NASA, USGS, GDELT, ACLED...), los normaliza
+Agrega eventos de multiples fuentes (USGS, FIRMS NASA, GDELT Cloud v2, ACLED...), los normaliza
 a un modelo canonico, aplica clustering espacio-temporal y los expone via API REST.
 
 ---
@@ -13,8 +13,12 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 | Componente | Descripcion |
 |------------|-------------|
 | **Modelo de datos** | ORM SQLAlchemy para todas las tablas (`events_canonical`, `incidents`, `aoi`, `corrections_audit`, `events_quarantine`, `sources_metadata`) |
-| **Ingestor FIRMS** | Pull polling con retry/backoff exponencial, filtro por AOI bbox, manejo de rate limiting 429 |
+| **Ingestor FIRMS** | Pull polling con retry/backoff exponencial, filtro por AOI bbox, tipo 0/1 (excluye type 2/3), manejo de rate limiting 429 |
 | **Ingestor USGS** | Pull polling cada 3 min, manejo de rate limiting 429, filtro `minmagnitude=4.0` |
+| **Ingestor GDELT** | API GDELT Cloud v2 (gdeltcloud.com/api/v2), ventana 5 min (max 29 dias), Bearer auth, analisis de titulo para event_type, deduplicacion por `globalEventId` |
+| **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicacion por `event_id`, categorias ACLED -> internal mapping |
+| **Normalizacion GDELT** | Mapper Events v2 a `EventCanonicalCreate`, CAMEO code -> category/event_type, deduplicacion por `globalEventId` |
+| **Normalizacion ACLED** | Mapper JSON a `EventCanonicalCreate`, clasificacion ACLED -> internal, deduplicacion por `event_id` |
 | **Normalizacion FIRMS** | Mapper CSV a `EventCanonicalCreate`, severidad por FRP (MW), deduplicacion SHA-256 |
 | **Normalizacion USGS** | Mapper GeoJSON a `EventCanonicalCreate`, severidad por magnitud Richter, deduplicacion por `properties.ids` |
 | **Validacion / Quarantine** | 6 reglas de rechazo (`INVALID_COORDS`, `NULL_COORDS`, `FUTURE_DATE`, `NULL_EVENT_TYPE`, `NEGATIVE_FATALITIES`, `SCHEMA_ERROR`), insercion en `events_quarantine` |
@@ -396,17 +400,22 @@ geosentinel/
 │   │   └── seed.py          # GET /v1/seed (datos de prueba)
 │   └── schemas/             # Modelos Pydantic de respuesta API
 ├── ingestors/
-│   ├── firms_ingestor.py    # Pull FIRMS NASA (CSV, retry/backoff)
-│   └── usgs_ingestor.py     # Pull USGS GeoJSON (retry/backoff)
+│   ├── firms_ingestor.py    # Pull FIRMS NASA (CSV, retry/backoff, tipo 0/1)
+│   ├── usgs_ingestor.py     # Pull USGS GeoJSON (retry/backoff, mag>=4.0)
+│   ├── gdelt_ingestor.py    # Pull GDELT Cloud v2 (gdeltcloud.com, Bearer)
+│   └── acled_ingestor.py    # Pull ACLED (OAuth2 Bearer, backfill 48h)
 ├── normalizers/
 │   ├── firms_mapper.py      # FIRMS row -> EventCanonicalCreate
-│   └── usgs_mapper.py       # USGS feature -> EventCanonicalCreate
+│   ├── usgs_mapper.py       # USGS feature -> EventCanonicalCreate
+│   ├── gdelt_mapper.py      # GDELT Events v2 -> EventCanonicalCreate
+│   └── acled_mapper.py      # ACLED JSON -> EventCanonicalCreate
 ├── jobs/
 │   ├── clustering_job.py    # DBSCAN espacio-temporal + metricas
 │   ├── event_processing.py  # Upsert en events_canonical
 │   └── incident_lifecycle.py# Maquina de estados + corrections_audit
 ├── models/                  # ORM SQLAlchemy (tablas BD)
 ├── schemas/                 # Pydantic internos (EventCanonicalCreate, etc.)
+├── scripts/                 # Scripts utilitarios (run_*, query_db, check_db)
 ├── validation/
 │   └── validator.py         # 6 reglas de validacion + quarantine
 ├── alembic/                 # Migraciones de BD (herramienta: alembic)

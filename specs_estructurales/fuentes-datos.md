@@ -23,31 +23,433 @@
 
 ## 2. Contratos de API por fuente
 
-### 2.1 GDELT Cloud Events v2
+### 2.1 GDELT Cloud Events v2 (https://gdeltcloud.com/dashboard)
 
-- **Endpoint base**: `https://api.gdeltcloud.com/v2/`
-- **Autenticación**: API key en header `X-API-Key`
-- **Frecuencia de polling**: cada 5 minutos
-- **Filtro recomendado**: `event_family=conflict` para reducir volumen
-- **Formato de respuesta**: JSON
-- **Latencia típica desde evento**: 15–30 min
-- **Licencia**: Dominio público
-- **Documentación**: `https://docs.gdeltcloud.com`
+##### Resumen
+GDELT Cloud v2 es la interfaz recomendada para nuevos desarrollos sobre productos generados de GDELT Cloud, incluyendo Events, Stories, summaries, descubrimiento de entidades y geografía administrativa.[1] La documentación oficial la presenta como una superficie simplificada y orientada a producto, distinta de la API clásica de GDELT Project, y especifica autenticación mediante API key enviada como Bearer token.[1]
+https://gdeltcloud.com/dashboard
 
-### 2.2 ACLED
+##### Base y autenticación
+La API usa autenticación por cabecera `Authorization: Bearer gdelt_sk_...`.[1] La documentación oficial indica que v2 reutiliza el mismo formato de API key que v1, pero recomienda v2 para nuevos dashboards, flujos de monitorización y búsquedas ad hoc.[1]
+Permite 100 llamadas al mes a la API y se resetea el dia 1 de cada mes
 
-- **Endpoint base**: `https://api.acleddata.com/acled/read`
-- **Autenticación**: `?key=<API_KEY>&email=<EMAIL>` (query params)
-- **Frecuencia de polling**: diaria (la fuente actualiza aprox. semanal/quincenal por región)
-- **Lag real por región**: 7–28 días. Diseñar backfill para ventanas sin datos.
-- **Campos clave**: `event_date`, `latitude`, `longitude`, `event_type`,
-  `actor1`, `actor2`, `fatalities`, `geo_precision`, `data_id`
-- **`geo_precision`**: 1=exacta, 2=ciudad/pueblo, 3=ADM2, 4=ADM1, 5=país
-- **Formato**: JSON o CSV
-- **Licencia**: CC BY-NC 4.0 (solo uso no comercial)
-- **Documentación**: `https://acleddata.com/api-documentation/`
+###### Ejemplo de cabecera
+```http
+Authorization: Bearer gdelt_sk_...
+```
 
-### 2.3 FIRMS (NASA Fire Information)
+###### Dominio base
+Los ejemplos documentados usan el dominio `https://gdeltcloud.com/api/v2/`.[1]
+
+##### Diseño funcional
+La API v2 se centra en objetos generados y normalizados, no en campos crudos de GDELT clásico.[1] La documentación indica expresamente que v2 se enfoca en Events estructurados, Stories agrupadas, métricas generadas, descubrimiento de entidades y enlaces entre entidades, Stories y Events.[1]
+
+También aclara que v2 **no expone** campos legacy o knobs de ajuste como `scope`, `detail`, `geo_scope`, `event_readiness`, `cluster_certainty`, `language`, `quad_class` o `raw total_events`.[1]
+
+##### Endpoints principales
+| Endpoint | Descripción |
+|---|---|
+| `GET /api/v2/events` | Lista Events estructurados.[1] |
+| `GET /api/v2/events/{event_id}` | Devuelve un Event concreto.[1] |
+| `GET /api/v2/events/summary` | Resumen agregado de Events por bucket.[1] |
+| `GET /api/v2/stories` | Lista Stories agrupadas.[1] |
+| `GET /api/v2/stories/{story_id}` | Devuelve una Story concreta.[1] |
+| `GET /api/v2/stories/{story_id}/articles` | Lista completa de artículos de una Story.[1] |
+| `GET /api/v2/stories/summary` | Resumen agregado de Stories.[1] |
+| `GET /api/v2/entities` | Lista entidades descubiertas.[1] |
+| `GET /api/v2/entities/{entity_id}` | Perfil y enlaces de una entidad.[1] |
+| `GET /api/v2/geo/admin1` | Descubre valores válidos de `admin1` por país.[1] |
+
+##### Convenciones de geografía
+La documentación recomienda usar nombres de país en inglés natural, como `France`, `United States` o `South Korea`.[1] El backend acepta también ISO-3 y aliases legacy FIPS por compatibilidad, pero normaliza la salida del país a nombre inglés plano.[1]
+
+Los filtros `region` y `continent` se expanden internamente a listas ISO-3.[1] En Events, los filtros geográficos hacen match tanto por localización del evento como por países de origen de actores; en Stories ocurre algo equivalente a través de Events enlazados.[1]
+
+`admin1` es opcional y filtra solo la localización del evento o story, no el origen de actores.[1] Cuando un match geográfico amplio se produce por origen del actor y no por localización primaria, la API lo refleja en `geo_context.actor_origin_countries`.[1]
+
+##### Estructuras de respuesta
+Los endpoints de lista devuelven un sobre con `success`, `data` y `pagination`.[1] Los endpoints de detalle devuelven un único objeto en `data`, y los endpoints summary devuelven `group_by` junto con buckets agregados en `data`.[1]
+
+###### Envelope de lista
+```json
+{
+  "success": true,
+  "data": [],
+  "pagination": {
+    "limit": 25,
+    "cursor": null,
+    "next_cursor": "25"
+  }
+}
+```
+
+###### Error estándar
+```json
+{
+  "success": false,
+  "error": "Invalid continent. Use one of: Africa, Asia, Europe, North America, South America, Oceania",
+  "code": "INVALID_CONTINENT"
+}
+```
+La documentación publica este formato de error estándar.[1]
+
+##### Events
+Los Events son uno de los dos objetos principales de v2 y pueden pertenecer a las familias `conflict` o `cameoplus`.[1] El Event card documentado incluye identificador estable, geografía normalizada, actores, métricas, fatalities, referencias a stories y entidades, y top articles como evidencia resumida.[1]
+
+###### Filtros comunes de `GET /api/v2/events`
+| Parámetro | Descripción |
+|---|---|
+| `date_start`, `date_end` | Rango de fechas en `YYYY-MM-DD`.[1] |
+| `country`, `region`, `continent`, `admin1` | Filtros geográficos.[1] |
+| `event_family` | `conflict` o `cameoplus`.[1] |
+| `category`, `subcategory` | Clasificación del evento; `category` acepta uno o varios valores separados por coma.[1] |
+| `domain` | Uno de `POLITICAL`, `ECONOMIC`, `CORPORATE`, `TECHNOLOGY`, `INFRASTRUCTURE`, `HEALTH`, `INFORMATION`, `ENVIRONMENT`, `CRIME`.[1] |
+| `has_fatalities` | `true` o `false`.[1] |
+| `search` | Búsqueda semántica o libre en endpoints de lista.[1] |
+| `sort` | `significance` o `recent`.[1] |
+| `limit`, `cursor` | Paginación.[1] |
+
+###### Ejemplo de consulta
+```bash
+curl "https://gdeltcloud.com/api/v2/events?country=France&category=Protests&date_start=2026-04-01&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Campos principales de un Event
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador estable v2 del Event.[1] |
+| `url`, `primary_story_url` | URL pública GDELT Cloud utilizable como cita si el Event tiene Story enlazada.[1] |
+| `family` | `conflict` o `cameoplus`.[1] |
+| `title`, `summary` | Título y resumen generados.[1] |
+| `event_date` | Fecha del evento.[1] |
+| `category`, `subcategory`, `domain`, `event_code` | Taxonomía y código asociado.[1] |
+| `geo` | Localización principal del Event.[1] |
+| `geo_context` | Explica matches geográficos amplios, incluido actor origin.[1] |
+| `actors` | Actores con nombre, país normalizado y rol.[1] |
+| `metrics` | Significance, Goldstein, magnitud, confianza y otras métricas según familia.[1] |
+| `has_fatalities`, `fatalities` | Indicador y cuenta de fatalidades.[1] |
+| `story_refs` | Referencias a Stories enlazadas.[1] |
+| `entity_refs` | Entidades enlazadas con tipo y, cuando exista, Wikipedia URL.[1] |
+| `top_articles` | Top 3 artículos inline.[1] |
+
+###### Event Summary
+`GET /api/v2/events/summary` acepta `group_by=date|country|region|continent|category|subcategory`.[1] La documentación indica que los summary buckets incluyen recuentos simples y estadísticas agregadas de significance, Goldstein, CAMEO+, confidence, article evidence y fatality counts o rates.[1]
+
+Importante: los endpoints summary **no aceptan `search`**.[1] La recomendación oficial es usar primero el endpoint de lista para recuperación semántica y después el summary con filtros estructurados.[1]
+
+###### Ejemplo de Event Summary
+```bash
+curl "https://gdeltcloud.com/api/v2/events/summary?region=Middle%20East&event_family=conflict&has_fatalities=true&group_by=country&date_start=2026-04-01&date_end=2026-04-17" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+##### Stories
+Las Stories representan clusters narrativos y devuelven top articles como vista resumida de evidencia.[1] La story card incluye geografía principal inferida desde Events enlazados, métricas agregadas, linked events, entity refs y flags de fatalidades.[1]
+
+###### Filtros comunes de `GET /api/v2/stories`
+| Parámetro | Descripción |
+|---|---|
+| `date_start`, `date_end` | Rango de fechas.[1] |
+| `country`, `region`, `continent`, `admin1` | Filtros geográficos.[1] |
+| `category`, `event_category`, `subcategory`, `domain` | Filtros temáticos y por eventos enlazados.[1] |
+| `has_events`, `has_fatalities` | Filtros booleanos.[1] |
+| `article_count_min`, `article_count_max` | Volumen mínimo o máximo de artículos.[1] |
+| `search` | Recuperación semántica en listas.[1] |
+| `sort` | `significance` o `recent`.[1] |
+| `limit`, `cursor` | Paginación.[1] |
+
+###### Ejemplo de consulta
+```bash
+curl "https://gdeltcloud.com/api/v2/stories?continent=Asia&search=new%20data%20center%20projects&article_count_min=2&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Story Articles
+Los endpoints de lista y detalle solo devuelven los top 3 artículos inline.[1] Para obtener el conjunto completo de fuentes, la documentación indica usar `GET /api/v2/stories/{story_id}/articles`, que además soporta paginación por `cursor`.[1]
+
+###### Story Summary
+`GET /api/v2/stories/summary` usa el mismo patrón general que Events summary, con `group_by=date|country|region|continent|category|subcategory`.[1] Los buckets incluyen story counts, linked event counts, article volume, recency y agregados de métricas derivadas de Events enlazados.[1]
+
+También aquí, los endpoints summary **no aceptan `search`**.[1]
+
+##### Entities
+La API publica `GET /api/v2/entities` y `GET /api/v2/entities/{entity_id}` para descubrimiento y perfilado de entidades.[1] Las entity cards incluyen `id`, `url`, `name`, `type`, `wikipedia_url` y métricas como `article_count`, `mention_count`, `story_count`, `event_count` y `avg_salience`.[1]
+
+Los perfiles de entidad añaden `story_refs` y `event_refs` enlazados.[1] La documentación aclara que esta primera iteración v2 está centrada en descubrimiento limpio y linking, mientras que un rediseño más profundo de entidades queda diferido.[1]
+
+##### Admin1 discovery
+Para descubrir valores válidos de `admin1`, la documentación recomienda consultar un país cada vez mediante `GET /api/v2/geo/admin1?country=...`.[1] La respuesta incluye `success`, `country`, la lista `admin1` y el `source`.[1]
+
+###### Ejemplo
+```bash
+curl "https://gdeltcloud.com/api/v2/geo/admin1?country=France" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+##### Ranking y significance
+El orden por defecto es `sort=significance`.[1] La documentación explica que Event significance combina Goldstein severity, magnitud CAMEO+, systemic importance, propagation potential, market sensitivity, fatalities, article evidence y confidence con pesos definidos.[1]
+
+La fórmula publicada es: Goldstein severity 25%, CAMEO+ magnitude 20%, systemic importance 15%, propagation potential 10%, market sensitivity 10%, fatalities 10%, article evidence 5% y confidence 5%.[1] También especifica que `goldstein_scale` se expone públicamente, está presente para todos los Conflict Events, para los CAMEO+ políticos y puede ser `null` en dominios no políticos donde no sea significativo.[1]
+
+En Stories, significance combina linked Event significance, article count capado y recency.[1] Cuando la prioridad es frescura en lugar de importancia, la documentación recomienda `sort=recent`.[1]
+
+##### Buenas prácticas oficiales
+La guía recomienda usar Events cuando se necesitan incidentes estructurados, actores, categorías, fatalities o métricas event-level.[1] Recomienda usar Stories cuando interesa una narrativa agrupada con evidencia periodística superior.[1]
+
+También recomienda usar summaries para dashboards y trend charts, con drill-down posterior a Events o Stories usando los mismos filtros.[1] Para monitorización en vivo, aconseja consultar el último día poblado o una ventana móvil de 7 a 30 días usando `date_start` y `date_end` explícitos.[1]
+
+La documentación añade que `search` debe reservarse para recuperación semántica en endpoints de lista, porque v2 embebe el texto de consulta, aplica filtros estructurados como candidate set y rankea por similitud coseno con embeddings almacenados.[1] Esto refuerza que summaries son analíticos, mientras que listas son de retrieval.[1]
+
+##### Ejemplos de uso
+###### Monitorización por país
+```bash
+curl "https://gdeltcloud.com/api/v2/events?country=United%20States&date_start=2026-04-11&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Infraestructura
+```bash
+curl "https://gdeltcloud.com/api/v2/events?event_family=cameoplus&domain=INFRASTRUCTURE&country=United%20States&date_start=2026-04-11&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Búsqueda semántica de eventos
+```bash
+curl "https://gdeltcloud.com/api/v2/events?search=attacks%20on%20energy%20infrastructure&date_start=2026-04-11&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Protestas recientes
+```bash
+curl "https://gdeltcloud.com/api/v2/events?category=Protests,CRIME&country=India&date_start=2026-04-17&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Trend diario
+```bash
+curl "https://gdeltcloud.com/api/v2/events/summary?category=Protests,CRIME&country=India&group_by=date&date_start=2026-04-11&date_end=2026-04-17" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Stories sobre data centers en Asia
+```bash
+curl "https://gdeltcloud.com/api/v2/stories?continent=Asia&search=new%20data%20center%20projects&article_count_min=1&date_start=2026-04-11&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Fatal conflict monitoring
+```bash
+curl "https://gdeltcloud.com/api/v2/events?event_family=conflict&has_fatalities=true&country=Lebanon&date_start=2026-04-11&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+###### Drilldown por admin1
+```bash
+curl "https://gdeltcloud.com/api/v2/geo/admin1?country=United%20States" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+```bash
+curl "https://gdeltcloud.com/api/v2/events?country=United%20States&admin1=District%20of%20Columbia&date_start=2026-04-11&date_end=2026-04-17&sort=significance" \
+ -H "Authorization: Bearer $GDELT_CLOUD_API_KEY"
+```
+
+##### JSON técnico resumido
+```json
+{
+  "api": "GDELT Cloud",
+  "version": "v2",
+  "base_url": "https://gdeltcloud.com/api/v2",
+  "authentication": {
+    "type": "Bearer API key",
+    "header": "Authorization: Bearer gdelt_sk_...",
+    "required": true
+  },
+  "resources": [
+    "events",
+    "events/{event_id}",
+    "events/summary",
+    "stories",
+    "stories/{story_id}",
+    "stories/{story_id}/articles",
+    "stories/summary",
+    "entities",
+    "entities/{entity_id}",
+    "geo/admin1"
+  ],
+  "event_filters": [
+    "date_start",
+    "date_end",
+    "country",
+    "region",
+    "continent",
+    "admin1",
+    "event_family",
+    "category",
+    "subcategory",
+    "domain",
+    "has_fatalities",
+    "search",
+    "sort",
+    "limit",
+    "cursor"
+  ],
+  "story_filters": [
+    "date_start",
+    "date_end",
+    "country",
+    "region",
+    "continent",
+    "admin1",
+    "category",
+    "event_category",
+    "subcategory",
+    "domain",
+    "has_events",
+    "has_fatalities",
+    "article_count_min",
+    "article_count_max",
+    "search",
+    "sort",
+    "limit",
+    "cursor"
+  ],
+  "summary_group_by": [
+    "date",
+    "country",
+    "region",
+    "continent",
+    "category",
+    "subcategory"
+  ],
+  "notes": [
+    "Summary endpoints do not accept search.",
+    "Use plain English geography names in docs and apps.",
+    "Use geo/admin1 to discover valid admin1 values."
+  ]
+}
+```
+
+##### Referencia oficial
+La referencia principal utilizada en esta guía es la documentación oficial de GDELT Cloud v2.[1]
+
+
+
+
+
+
+### 2.2 ACLED (https://acleddata.com/myacled)
+
+
+#### Resumen
+La API de ACLED permite consultar eventos de conflicto mediante un endpoint REST autenticado con token Bearer obtenido a través de OAuth2 con *password grant*.[1] La documentación oficial relevante se concentra en la guía general de API, la página específica del endpoint ACLED y la explicación de los elementos comunes de la API.[1][2][3]
+
+#### Endpoint base
+El endpoint operativo para consultar datos ACLED es `https://acleddata.com/api/acled/read`.[1] La documentación del endpoint también presenta la base `https://acleddata.com/api/` y el recurso `acled`, que en la práctica se utiliza a través de la ruta anterior.[1]
+
+##### Ejemplo de consulta
+```text
+https://acleddata.com/api/acled/read?_format=csv&country=Georgia|Armenia|Azerbaijan&year=2021
+```
+Ejemplos de este tipo aparecen en la documentación oficial del endpoint.[1]
+
+#### Autenticación
+La autenticación se realiza mediante OAuth2 usando el flujo **Resource Owner Password Credentials** (`grant_type=password`).[1] El token se solicita en `https://acleddata.com/oauth/token` enviando los parámetros `grant_type=password`, `client_id=acled`, `username=<email>` y `password=<password>` como `application/x-www-form-urlencoded`.[1]
+
+##### Solicitud de token
+```bash
+curl -X POST 'https://acleddata.com/oauth/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'grant_type=password' \
+  --data-urlencode 'client_id=acled' \
+  --data-urlencode 'username=TU_EMAIL' \
+  --data-urlencode 'password=TU_PASSWORD'
+```
+La respuesta devuelve un token de acceso utilizable en las llamadas posteriores al endpoint ACLED.[1]
+
+##### Uso del token
+Las consultas al endpoint deben incluir la cabecera `Authorization: Bearer <ACCESS_TOKEN>`.[1] La documentación oficial muestra este patrón en los ejemplos de acceso autenticado.[1]
+
+```bash
+curl -X GET 'https://acleddata.com/api/acled/read?_format=json&limit=10' \
+  -H 'Authorization: Bearer ACCESS_TOKEN'
+```
+
+#### Formatos de respuesta
+La API soporta formatos de salida `json`, `csv` y `xml` mediante extensiones o el parámetro `_format`.[2] La documentación revisada no confirma de forma clara `txt` como formato estándar en la sección de elementos comunes, por lo que no conviene asumirlo sin validación adicional.[2]
+
+##### Selección del formato
+```text
+?_format=json
+?_format=csv
+?_format=xml
+```
+La documentación oficial utiliza `_format` en los ejemplos, por lo que ese es el mecanismo más seguro para fijar el formato de respuesta.[1][2]
+
+#### Estructura de la respuesta JSON
+Cuando se solicita JSON, la respuesta incluye metadatos de envoltura además del array principal de datos.[1] Entre los campos documentados están `status`, `success`, `last_update`, `count`, `messages`, `data`, `filename` y `data_query_restrictions`.[1]
+
+##### Esquema general
+```json
+{
+  "status": 200,
+  "success": true,
+  "last_update": "...",
+  "count": ...,
+  "messages": [],
+  "data": [...],
+  "filename": "...",
+  "data_query_restrictions": {...}
+}
+```
+Este esquema resume la estructura que la documentación muestra para respuestas JSON del endpoint ACLED.[1]
+
+#### Parámetros y filtros habituales
+La API admite filtros sobre dimensiones como país, año, actores, tipos de evento, fechas y localización administrativa.[1] También documenta operadores y convenciones para paginación, tamaño de fichero y composición de consultas.[1][2]
+
+##### Ejemplos frecuentes
+- `country=Ukraine`
+- `year=2025`
+- `event_type=Battles`
+- `limit=500`
+- `page=2`
+- `event_date=2025-01-01|2025-01-31`
+
+Estos ejemplos son representativos de los filtros descritos en la documentación oficial y de su sintaxis general basada en parámetros de query string.[1][2]
+
+#### Campos clave devueltos
+La tabla oficial de columnas devueltas incluye identificadores, fechas, ubicación, taxonomía del evento, actores, impacto y metadatos de trazabilidad.[1]
+
+| Categoría | Campos relevantes |
+|---|---|
+| Identificación | `event_id_cnty`[1] |
+| Fecha | `event_date`, `year`, `time_precision`[1] |
+| Ubicación | `region`, `country`, `admin1`, `admin2`, `admin3`, `location`, `latitude`, `longitude`, `geo_precision`[1] |
+| Clasificación | `disorder_type`, `event_type`, `sub_event_type`[1] |
+| Actores | `actor1`, `assoc_actor_1`, `inter1`, `actor2`, `assoc_actor_2`, `inter2`, `interaction`, `civilian_targeting`[1] |
+| Impacto | `fatalities`, `tags`[1] |
+| Metadatos | `iso`, `source`, `source_scale`, `notes`, `timestamp`[1] |
+| Población | `population_*` cuando se solicita población ampliada[ cite:1] |
+
+#### Precisión geográfica
+`geo_precision` está documentado como un código numérico entre 1 y 3 que indica el nivel de certeza de la localización.[1] No se ha verificado en la documentación oficial revisada un rango de 1 a 5 para este campo.[1]
+
+#### Frecuencia de actualización y polling
+La documentación revisada no fija una frecuencia oficial de polling para clientes externos.[1][2] Tampoco se encontró en esas páginas una tabla oficial de *lag* por región o una promesa documental de actualización semanal, quincenal o por rangos de días.[1][2]
+
+#### Restricciones de uso
+El uso de los datos de ACLED está sujeto a términos específicos y restricciones de licencia publicadas por la organización.[4][5][6] La documentación de uso y acceso indica que el uso comercial requiere revisión específica y no debe asumirse como permitido por defecto.[4][5][6]
+
+
+#### Recomendaciones de implementación
+- Solicitar el token con `application/x-www-form-urlencoded`.[1]
+- Enviar siempre `Authorization: Bearer <token>` en cada consulta.[1]
+- Fijar el formato con `_format=json`, `_format=csv` o `_format=xml`.[1][2]
+- No asumir permiso comercial sin revisión legal de los términos de ACLED.[4][5][6]
+- Validar paginación, límites y restricciones de consulta antes de automatizar ingestas masivas.[1][2]
+
+### 2.3 FIRMS (NASA Fire Information) (https://firms.modaps.eosdis.nasa.gov/api/map_key/)
 
 - **Endpoint API**: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/<PRODUCT>/<AREA_COORDS>/<DAYS>/`
   - `MAP_KEY`: clave personal del usuario (no hardcodear)

@@ -14,22 +14,30 @@ from validation.validator import insert_quarantine, validate_event
 
 logger = logging.getLogger(__name__)
 
-GDELT_BASE_URL = "https://api.gdeltcloud.com/v2/"
+GDELT_BASE_URL = "https://gdeltcloud.com/api/v2"
 POLL_INTERVAL_SECONDS = 300
 
 DEFAULT_BACKOFF_BASE = 2
-DEFAULT_BACKOFF_MAX = 60
+DEFAULT_BACKOFF_MAX = 120
 DEFAULT_MAX_RETRIES = 5
 
+CONFLICT_ZONES = [
+    "Ukraine",
+    "Israel",
+    "Palestine",
+    "Gaza",
+    "Syria",
+    "Yemen",
+    "Sudan",
+    "Mali",
+    "Burkina Faso",
+    "Niger",
+    "Colombia",
+    "Myanmar",
+]
 
-class GDELTIngestor:
-    """Ingestor para GDELT Cloud Events v2 (F-ING-GDELT).
 
-    Realiza pull polling cada 5 minutos filtrando por event_family=conflict.
-    Autenticacion mediante header X-API-Key (variable GDELT_API_KEY).
-    Source independence class: media_derived (factor de confianza x0.5).
-    """
-
+class GDELTCloudIngestor:
     def __init__(
         self,
         session: requests.Session | None = None,
@@ -54,7 +62,7 @@ class GDELTIngestor:
         retry_strategy = Retry(
             total=max_retries,
             backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504],
+            status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["GET"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -62,38 +70,74 @@ class GDELTIngestor:
         http_session.mount("http://", adapter)
         return http_session
 
-    def _build_params(self, start_time: datetime, end_time: datetime) -> dict[str, Any]:
-        return {
-            "event_family": "conflict",
-            "start_date": start_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "end_date": end_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "format": "json",
+    def _get_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.api_key}"}
+
+    def _build_params(
+        self,
+        date_start: datetime,
+        date_end: datetime,
+        country: str | None = None,
+        event_family: str = "conflict",
+        has_fatalities: bool | None = None,
+        search: str | None = None,
+        sort: str = "recent",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "date_start": date_start.strftime("%Y-%m-%d"),
+            "date_end": date_end.strftime("%Y-%m-%d"),
+            "event_family": event_family,
+            "sort": sort,
+            "limit": limit,
         }
+        if country:
+            params["country"] = country
+        if has_fatalities is not None:
+            params["has_fatalities"] = "true" if has_fatalities else "false"
+        if search:
+            params["search"] = search
+        return params
 
-    def fetch_events(self, start_time: datetime, end_time: datetime) -> list[dict[str, Any]]:
-        """Descarga eventos de conflicto del periodo indicado desde GDELT Cloud v2.
+    def fetch_events(
+        self,
+        date_start: datetime,
+        date_end: datetime,
+        country: str | None = None,
+        has_fatalities: bool | None = None,
+        search: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params = self._build_params(
+            date_start=date_start,
+            date_end=date_end,
+            country=country,
+            has_fatalities=has_fatalities,
+            search=search,
+            limit=limit,
+        )
+        headers = self._get_headers()
 
-        Args:
-            start_time: Inicio del intervalo UTC.
-            end_time: Fin del intervalo UTC.
-
-        Returns:
-            Lista de eventos en formato GDELT.
-
-        Raises:
-            requests.exceptions.HTTPError: En errores HTTP no recuperables.
-            requests.exceptions.Timeout: Si la solicitud supera el timeout.
-        """
-        params = self._build_params(start_time, end_time)
-        headers = {"X-API-Key": self.api_key}
-
-        logger.info(f"Fetching GDELT events {start_time.isoformat()} -> {end_time.isoformat()}")
+        logger.info(f"Fetching GDELT Cloud events: {date_start.date()} -> {date_end.date()}" +
+                   (f" country={country}" if country else ""))
 
         try:
-            response = self.session.get(GDELT_BASE_URL, params=params, headers=headers, timeout=30)
+            response = self.session.get(
+                f"{GDELT_BASE_URL}/events",
+                params=params,
+                headers=headers,
+                timeout=30,
+            )
             response.raise_for_status()
             data = response.json()
-            return data.get("events", data) if isinstance(data, dict) else data
+
+            if not data.get("success", False):
+                error_msg = data.get("error", "Unknown error")
+                error_code = data.get("code", "UNKNOWN")
+                logger.error(f"GDELT API error: {error_code} - {error_msg}")
+                return []
+
+            return data.get("data", [])
         except requests.exceptions.Timeout:
             logger.error("GDELT request timeout")
             raise
@@ -102,6 +146,14 @@ class GDELTIngestor:
                 retry_after = int(e.response.headers.get("Retry-After", 60))
                 logger.warning(f"GDELT rate limited (429), Retry-After={retry_after}s")
                 raise
+            if e.response is not None and e.response.status_code == 400:
+                try:
+                    error_data = e.response.json()
+                    if error_data.get("code") == "DATE_WINDOW_TOO_LARGE":
+                        logger.warning("GDELT date window exceeds 30 days")
+                        return []
+                except Exception:
+                    pass
             logger.error(f"GDELT HTTP error: {e}")
             raise
         except requests.exceptions.JSONDecodeError as e:
@@ -115,18 +167,9 @@ class GDELTIngestor:
         backoff = self.backoff_base**attempt
         return min(backoff, self.backoff_max)
 
-    def run(self, db_session, process_callback=None) -> dict[str, Any]:
-        """Ejecuta un ciclo de polling: descarga, valida y persiste eventos GDELT.
-
-        Args:
-            db_session: Sesion SQLAlchemy activa.
-            process_callback: Funcion alternativa a process_and_upsert_event (tests).
-
-        Returns:
-            Diccionario con contadores: processed, quarantined, duplicates, total_fetched.
-        """
+    def run(self, db_session, process_callback=None, lookback_days: int = 1) -> dict[str, Any]:
         end_time = datetime.now(timezone.utc)
-        start_time = end_time - timedelta(minutes=5)
+        start_time = end_time - timedelta(days=lookback_days)
 
         events: list[dict[str, Any]] = []
         attempt = 0
@@ -154,6 +197,13 @@ class GDELTIngestor:
                     time.sleep(retry_after)
                 else:
                     raise
+            except requests.exceptions.RequestException:
+                attempt += 1
+                if attempt >= self.max_retries:
+                    logger.error("Max retries reached for GDELT fetch")
+                    raise
+                wait_time = self._calculate_backoff(attempt)
+                time.sleep(wait_time)
 
         processed = 0
         quarantined = 0
@@ -194,22 +244,101 @@ class GDELTIngestor:
             "total_fetched": len(events),
         }
 
+    def run_all_zones(self, db_session, process_callback=None, lookback_days: int = 1) -> dict[str, Any]:
+        end_time = datetime.now(timezone.utc)
+
+        total_processed = 0
+        total_quarantined = 0
+        total_duplicates = 0
+        total_fetched = 0
+
+        callback = process_callback or process_and_upsert_event
+
+        for country in CONFLICT_ZONES:
+            events = []
+            attempt = 0
+
+            while attempt < self.max_retries and not events:
+                try:
+                    start_time = end_time - timedelta(days=lookback_days)
+                    events = self.fetch_events(
+                        start_time, end_time,
+                        country=country,
+                        has_fatalities=True,
+                        limit=100,
+                    )
+                    break
+                except requests.exceptions.HTTPError as e:
+                    attempt += 1
+                    if attempt >= self.max_retries:
+                        logger.error(f"Max retries for {country}: {e}")
+                        break
+                    time.sleep(self._calculate_backoff(attempt))
+                except Exception as e:
+                    attempt += 1
+                    if attempt >= self.max_retries:
+                        logger.error(f"Max retries for {country}: {e}")
+                        break
+                    time.sleep(self._calculate_backoff(attempt))
+
+            zone_processed = 0
+            zone_quarantined = 0
+            zone_duplicates = 0
+
+            for raw_event in events:
+                try:
+                    event = normalize_gdelt_event(raw_event)
+                    validation = validate_event(event)
+
+                    if not validation.is_valid:
+                        insert_quarantine(
+                            session=db_session,
+                            source="gdelt",
+                            raw_payload=raw_event,
+                            rejection_code=validation.rejection_code,
+                            rejection_detail=validation.rejection_detail,
+                        )
+                        zone_quarantined += 1
+                        continue
+
+                    result = callback(db_session, event)
+                    if result.get("duplicate"):
+                        zone_duplicates += 1
+                    else:
+                        zone_processed += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing GDELT event in {country}: {e}")
+                    zone_quarantined += 1
+
+            logger.info(f"{country}: {zone_processed} processed, {zone_duplicates} duplicates")
+            total_processed += zone_processed
+            total_quarantined += zone_quarantined
+            total_duplicates += zone_duplicates
+            total_fetched += len(events)
+
+        return {
+            "processed": total_processed,
+            "quarantined": total_quarantined,
+            "duplicates": total_duplicates,
+            "total_fetched": total_fetched,
+        }
+
 
 def run_polling():
-    """Bucle principal de polling GDELT. Ejecutar como proceso independiente."""
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
     engine = create_engine(os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/geosentinel"))
     Session = sessionmaker(bind=engine)
 
-    ingestor = GDELTIngestor()
+    ingestor = GDELTCloudIngestor()
 
     while True:
         session = Session()
         try:
             result = ingestor.run(session)
-            logger.info(f"GDELT poll result: {result}")
+            logger.info(f"GDELT Cloud poll result: {result}")
         except Exception as e:
             logger.error(f"GDELT polling failed: {e}")
         finally:

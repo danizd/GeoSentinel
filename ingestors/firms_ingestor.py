@@ -152,6 +152,7 @@ class FIRMSIngestor:
         quarantined = 0
         duplicates = 0
         skipped_low_confidence = 0
+        skipped_invalid_type = 0
 
         callback = process_callback or process_and_upsert_event
 
@@ -181,6 +182,8 @@ class FIRMSIngestor:
             except ValueError as e:
                 if "Confidence" in str(e):
                     skipped_low_confidence += 1
+                elif "Type" in str(e):
+                    skipped_invalid_type += 1
                 else:
                     logger.error(f"Error processing FIRMS row: {e}")
                     quarantined += 1
@@ -193,6 +196,7 @@ class FIRMSIngestor:
             "quarantined": quarantined,
             "duplicates": duplicates,
             "skipped_low_confidence": skipped_low_confidence,
+            "skipped_invalid_type": skipped_invalid_type,
             "total_fetched": len(hotspots),
         }
 

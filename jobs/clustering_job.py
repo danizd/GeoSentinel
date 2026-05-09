@@ -141,11 +141,46 @@ def compute_confidence(events: list[EventsCanonical]) -> float:
 
 
 def _parse_geometry_coords(point) -> tuple[float, float]:
-    # Cadena WKT directa
-    if isinstance(point, str) and point.startswith("POINT("):
-        coords = point.replace("POINT(", "").replace(")", "").split()
+    from shapely import wkb
+    from shapely.geometry import Point
+
+    if point is None:
+        return 0.0, 0.0
+
+    if isinstance(point, str):
+        if point.startswith("POINT("):
+            coords = point.replace("POINT(", "").replace(")", "").split()
+            return float(coords[1]), float(coords[0])
+        try:
+            pt = wkb.loads(point)
+            return pt.y, pt.x
+        except Exception:
+            return 0.0, 0.0
+
+    if hasattr(point, "data"):
+        try:
+            pt = wkb.loads(point.data)
+            return pt.y, pt.x
+        except Exception:
+            pass
+
+    if hasattr(point, "desc"):
+        try:
+            pt = wkb.loads(point.desc)
+            return pt.y, pt.x
+        except Exception:
+            pass
+
+    if hasattr(point, "wkt") and point.wkt.startswith("POINT("):
+        coords = point.wkt.replace("POINT(", "").replace(")", "").split()
         return float(coords[1]), float(coords[0])
-    # Geometria Shapely o mock con coords=((lon, lat),)
+
+    try:
+        pt = wkb.loads(bytes(point))
+        return pt.y, pt.x
+    except Exception:
+        pass
+
     coords_attr = getattr(point, "coords", None)
     if coords_attr is not None:
         try:
@@ -154,11 +189,7 @@ def _parse_geometry_coords(point) -> tuple[float, float]:
                 return float(first[1]), float(first[0])
         except (IndexError, TypeError):
             pass
-    # Geometria con atributo wkt
-    wkt = getattr(point, "wkt", None)
-    if isinstance(wkt, str) and wkt.startswith("POINT("):
-        coords = wkt.replace("POINT(", "").replace(")", "").split()
-        return float(coords[1]), float(coords[0])
+
     return 0.0, 0.0
 
 
@@ -316,6 +347,8 @@ def run_clustering_job(session: Session, last_run_time: datetime | None = None) 
         logger.info("No new events to cluster")
         return {"created": 0, "assigned": 0, "total_events": 0}
 
+    logger.info(f"[CLUSTERING] last_run_time={last_run_time}, total_events={len(new_events)}")
+
     categories = list(set(e.category for e in new_events))
 
     created = 0
@@ -327,18 +360,27 @@ def run_clustering_job(session: Session, last_run_time: datetime | None = None) 
             continue
 
         active_incidents = fetch_active_incidents(session, category)
+        logger.info(f"[{category}] {len(cat_events)} eventos, {len(active_incidents)} incidentes activos")
 
         for event in cat_events:
+            event_lat, event_lon = _parse_geometry_coords(event.location_point)
+            logger.info(f"  Evento {event.id}: lat={event_lat:.2f}, lon={event_lon:.2f}, time={event.event_time}")
+            
             best_incident = find_closest_incident(event, active_incidents, category)
-
+            logger.info(f"  best_incident={best_incident}")
+            
             if best_incident:
+                logger.info(f"  -> Asignando evento {event.id} a incidente {best_incident.incident_id}")
                 assign_event_to_incident(session, event, best_incident)
+                session.commit()
                 assigned += 1
             else:
-                create_new_incident(session, event)
+                new_inc = create_new_incident(session, event)
                 created += 1
+                logger.info(f"  -> Creado nuevo incidente {new_inc.incident_id} para evento {event.id}")
                 active_incidents = fetch_active_incidents(session, category)
 
+    session.commit()
     return {
         "created": created,
         "assigned": assigned,

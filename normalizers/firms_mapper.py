@@ -14,6 +14,8 @@ FIRMS_TYPE_MAP = {
 
 FIRMS_CONFIDENCE_FILTER = {"nominal", "high"}
 
+FIRMS_TYPE_FILTER = {0, 1}
+
 SEVERITY_FRP_MAP = {
     (0, 4): 1.0,
     (4, 8): 2.5,
@@ -61,6 +63,9 @@ def normalize_firms_row(row: dict[str, Any], product: str = "VIIRS_SNPP_NRT") ->
     event_time = _parse_datetime(acq_date, acq_time)
 
     fire_type = int(row.get("type", 0))
+    if fire_type not in FIRMS_TYPE_FILTER:
+        raise ValueError(f"Type '{fire_type}' not in {FIRMS_TYPE_FILTER}")
+
     event_type = FIRMS_TYPE_MAP.get(fire_type, "wildfire_hotspot")
 
     category = CategoryEnum.WILDFIRE if fire_type == 0 else CategoryEnum.OTHER

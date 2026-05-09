@@ -4,15 +4,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from jobs.clustering_job import run_clustering_job
 
-db_url = (os.environ.get("DATABASE_URL") or "").strip()
-if not db_url:
-    print("ERROR: DATABASE_URL no esta definida.")
-    sys.exit(1)
+db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/geosentinel")
 
 engine = create_engine(db_url)
 Session = sessionmaker(bind=engine)
