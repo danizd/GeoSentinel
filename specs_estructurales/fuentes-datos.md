@@ -15,7 +15,8 @@
 | FIRMS (NASA) | `sensor` | Detección de incendios | Bajo |
 | USGS | `sensor` | Terremotos tiempo real | Bajo |
 | OpenSky Network | `sensor` | Vuelos militares | Bajo |
-| MarineTraffic | `sensor` | Actividad naval | Medio (comercial) |
+| AISStream | `sensor` | Buques AIS tiempo real | Medio (comercial) |
+| MarineTraffic | `sensor` | Actividad naval enriquecida | Medio (comercial) |
 | Liveuamap | `media_derived` | Detección rápida conflictos | **Alto** (sin API pública) |
 | ReliefWeb | `field_reported` | Contexto humanitario | Bajo |
 
@@ -511,7 +512,49 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **SLA latencia**: < 3 minutos (datos de OpenSky tienen lag ~5 seg)
 - **Renderizado frontend**: capas nativas Mapbox (symbol + circle), icono SDF ✈ generado en `onLoad`, doble halo (oscuro + blanco) para contraste, sin dependencia de DeckGL
 
-### 2.6 MarineTraffic AIS API
+### 2.6 Ingestor AISStream (Buques AIS en Tiempo Real)
+
+- **Fuente primaria**: AISStream.io — `https://aisstream.io`
+- **Cuenta**: `https://aisstream.io/dashboard`
+- **Arquitectura**: WebSocket, sin polling HTTP
+  - Relay interno (`ais-relay`) mantiene conexión WS persistente con AISStream
+  - El relay normaliza, escribe snapshot en Redis y detecta dark-ships
+  - El ingestor consume `/api/ais/snapshot` y `/api/ais/events?since=T`
+  - `AISSTREAM_API_KEY` nunca sale del relay
+- **Endpoint del relay**:
+  - `GET /api/ais/snapshot` — estado actual de todos los buques
+  - `GET /api/ais/events?since=TIMESTAMP` — deltas incrementales
+  - `GET /api/military/v1/list-military-vessels?bbox=...` — buques militares por AOI
+  - `GET /health/ais` — estado WS upstream + age del snapshot
+- **Patrón**: WebSocket persistente + snapshot Redis + polling de deltas cada 5s
+- **Latencia**: tiempo real (sub-segundo desde emisión AIS)
+- **Dark-ship detection**: si `now - lastAisUpdate > DARK_SHIP_THRESHOLD_MIN` (20 min, configurable) → `isDark=true`
+- **Cache / fallback**: snapshot en Redis con TTL; si upstream cae → servir stale con `X-Stale: true`
+- **Circuit breaker**: 5 fallos consecutivos → stale indefinido + métrica `ais_upstream_connected=0`
+- **Enriquecimiento opcional**: USNI (United States Naval Institute) via API externa
+- **Campos clave**: `mmsi`, `lat`, `lon`, `sog`, `cog`, `heading`, `navigationalStatus`, `vesselType`, `flag`, `isDark`
+- **Autenticación**: `AISSTREAM_API_KEY` (API key de aisstream.io)
+- **Licencia**: AISStream.io Terms of Service — uso comercial requiere plan de pago
+- **Restricciones**: `mmsi` individual nunca en API pública (ver `E-SEC`); solo datos agregados por AOI
+- **Relación con MarineTraffic**: fuentes complementarias. AISStream tiene menor latencia (WS vs polling 5 min) y detección nativa de dark-ships. MarineTraffic tiene datos enriquecidos. En deduplicación cross-fuente, AISStream tiene prioridad.
+- **`source_independence_class`**: `sensor` — factor confianza: ×2.0
+- **SLA latencia**: < 5 segundos (emisión AIS → relay → snapshot Redis)
+- **Renderizado frontend** (planificado): ScatterplotLayer para buques (color por deployment/vesselType), PathLayer para trails, capa separada para dark-ships con pulso. Control `[VESSELS]` en LayerControls.
+- **Métricas obligatorias**: `ais_upstream_connected`, `ais_inbound_per_sec`, `ais_snapshot_age_ms`, `ais_dark_ships_total`
+
+**Variables de entorno requeridas**:
+```dotenv
+# Relay
+AISSTREAM_API_KEY=
+AIS_SNAPSHOT_INTERVAL_MS=3000
+DARK_SHIP_THRESHOLD_MIN=20
+
+# Ingestor
+AIS_RELAY_BASE_URL=http://ais-relay:8001
+AIS_POLL_EVENTS_MS=5000
+```
+
+### 2.7 MarineTraffic AIS API (complementaria)
 
 - **Endpoint base**: `https://services.marinetraffic.com/api/`
 - **Autenticación**: `?v=<version>&msgtype=json&apikey=<API_KEY>`
@@ -519,10 +562,10 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **Campos clave**: `MMSI`, `LAT`, `LON`, `SPEED`, `HEADING`,
   `SHIPNAME`, `SHIPTYPE`, `TIMESTAMP`
 - **Licencia**: Comercial — prohibida redistribución de datos brutos
-- **Uso**: Detectar actividad naval anómala (velocidad 0 en zonas de conflicto,
-  agrupamiento inusual, entrada en zonas restringidas)
+- **Uso**: Complemento de AISStream para datos enriquecidos. En deduplicación cross-fuente, AISStream tiene prioridad por menor latencia.
+- **Nota**: No implementado en esta versión. Ver `F-ING-MT`.
 
-### 2.7 Liveuamap
+### 2.8 Liveuamap
 
 - **⚠️ Estado: FUENTE DE RIESGO ALTO**
 - No existe API pública documentada ni contrato de SLA.
@@ -533,7 +576,7 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **Alternativas a evaluar**: Bellingcat, NATO crisis monitors, fuentes OSINT
   con API documentada.
 
-### 2.8 ReliefWeb API
+### 2.9 ReliefWeb API
 
 - **Endpoint base**: `https://api.reliefweb.int/v1/`
 - **Autenticación**: `?appname=<your-app-name>` (requerido pero libre)
@@ -560,6 +603,7 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 | USGS | < 5 minutos |
 | GDELT | < 20 minutos |
 | OpenSky (militar) | < 3 minutos |
+| AISStream | < 5 segundos |
 | FIRMS | < 3 horas |
 | MarineTraffic | < 10 minutos |
 | Liveuamap | < 20 minutos (si activo) |

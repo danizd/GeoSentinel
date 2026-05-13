@@ -34,6 +34,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | `F-ING-FIRMS` | `ingesta/firms.md` | Ingestor FIRMS NASA |
 | `F-ING-USGS` | `ingesta/usgs.md` | Ingestor USGS terremotos |
 | `F-ING-MIL` | `ingesta/military-flights.md` | Ingestor Vuelos Militares (OpenSky via relay) |
+| `F-ING-AIS` | `ingesta/aisstream.md` | Ingestor Buques AISStream (WebSocket) |
 | `F-ING-MT` | `ingesta/marinetraffic.md` | Ingestor MarineTraffic AIS |
 | `F-ING-LUM` | `ingesta/liveuamap.md` | Ingestor Liveuamap (riesgo alto) |
 
