@@ -33,22 +33,22 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
           onChange={(e) => setFilters({ category: e.target.value || undefined })}
           className="bg-bg-panel text-text-primary text-sm px-2 py-1 rounded border border-border-glow"
         >
-          <option value="">All Categories</option>
-          <option value="conflict">Conflict</option>
-          <option value="disaster_natural">Natural Disaster</option>
-          <option value="wildfire">Wildfire</option>
-          <option value="crime">Crime</option>
-          <option value="protest">Protest</option>
+          <option value="">Todas</option>
+          <option value="conflict">Conflicto</option>
+          <option value="disaster_natural">Desastre natural</option>
+          <option value="wildfire">Incendio</option>
+          <option value="crime">Crimen</option>
+          <option value="protest">Protesta</option>
         </select>
         <select
           value={filters.status || ''}
           onChange={(e) => setFilters({ status: e.target.value || undefined })}
           className="bg-bg-panel text-text-primary text-sm px-2 py-1 rounded border border-border-glow"
         >
-          <option value="open,updated">Active</option>
-          <option value="stale">Stale</option>
-          <option value="closed">Closed</option>
-          <option value="">All</option>
+          <option value="open,updated">Activos</option>
+          <option value="stale">Inactivos</option>
+          <option value="closed">Cerrados</option>
+          <option value="">Todos</option>
         </select>
       </div>
 
@@ -58,7 +58,7 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
             <div className="animate-spin h-6 w-6 border-2 border-accent-blue border-t-transparent rounded-full" />
           </div>
         ) : incidents.length === 0 ? (
-          <div className="text-center text-text-secondary p-4">No incidents match current filters</div>
+          <div className="text-center text-text-secondary p-4">Sin incidentes con los filtros actuales</div>
         ) : (
           incidents.map((incident) => {
             const isSelected = selectedIncident?.incident_id === incident.incident_id
@@ -96,7 +96,7 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
       </div>
 
       <div className="p-3 border-t border-border-glow text-xs text-text-secondary font-mono">
-        {total} incidents · Page {page} · {Math.ceil(total / (filters.limit || 20))} pages
+        {total} incidentes · Pág {page} de {Math.ceil(total / (filters.limit || 20))}
       </div>
     </div>
   )

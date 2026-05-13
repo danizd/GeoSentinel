@@ -100,6 +100,8 @@ class OpenskyClient:
     STATES_POSITION_SOURCE = 16
     STATES_CATEGORY = 17
 
+    _aircraft_cache: dict[str, dict] = {}
+
     def __init__(self, token_manager: Optional[TokenManager] = None, session: Optional[requests.Session] = None):
         self.token_manager = token_manager or TokenManager()
         self.session = session or requests.Session()
@@ -143,6 +145,29 @@ class OpenskyClient:
             logger.error(f"OpenSky request failed: {e}")
             raise
 
+    def fetch_aircraft_metadata(self, icao24: str) -> Optional[dict]:
+        cached = self._aircraft_cache.get(icao24.lower())
+        if cached is not None:
+            return cached if cached else None
+
+        url = f"{config.OPENSKY_BASE_URL}/metadata/aircraft/{icao24}"
+        headers = self.token_manager.headers()
+
+        try:
+            _rate_limiter.wait()
+            response = self.session.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                self._aircraft_cache[icao24.lower()] = data
+                return data
+            else:
+                self._aircraft_cache[icao24.lower()] = {}
+                return None
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to fetch metadata for {icao24}: {e}")
+            self._aircraft_cache[icao24.lower()] = {}
+            return None
+
     def parse_flight(self, raw: list[Any]) -> Optional[MilitaryFlight]:
         try:
             hex_code = raw[self.STATES_ICAO24] if len(raw) > self.STATES_ICAO24 else ""
@@ -178,6 +203,18 @@ class OpenskyClient:
             category = raw[self.STATES_CATEGORY] if len(raw) > self.STATES_CATEGORY else None
             is_interesting = bool(on_ground) or (category == 7)
 
+            aircraft_type = None
+            aircraft_model = None
+            registration = None
+            operator_name = None
+            if hex_code:
+                meta = self.fetch_aircraft_metadata(hex_code)
+                if meta:
+                    aircraft_type = meta.get("typecode")
+                    aircraft_model = meta.get("model")
+                    registration = meta.get("registration")
+                    operator_name = meta.get("operator")
+
             flight_id = f"{hex_code.upper()}:{int(datetime.fromisoformat(last_seen_iso).timestamp())}"
 
             return MilitaryFlight(
@@ -190,6 +227,10 @@ class OpenskyClient:
                 speed=speed_kts,
                 lastSeenAt=last_seen_iso,
                 operatorCountry=origin_country,
+                aircraftType=aircraft_type,
+                aircraftModel=aircraft_model,
+                registration=registration,
+                operator=operator_name,
                 isInteresting=is_interesting,
             )
         except Exception as e:

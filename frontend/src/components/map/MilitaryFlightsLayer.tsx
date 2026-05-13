@@ -20,7 +20,7 @@ const OPERATOR_COLORS: Record<string, number[]> = {
   DE: [200, 180, 0],
 }
 
-function getOperatorColor(country?: string): number[] {
+function getOperatorColor(country?: string | null): number[] {
   if (!country) return [255, 255, 255]
   return OPERATOR_COLORS[country.toUpperCase()] || [255, 255, 255]
 }

@@ -14,11 +14,15 @@ export interface MilitaryFlight {
   heading: number
   speed: number
   lastSeenAt: string
-  aircraftType?: string
-  operator?: string
-  operatorCountry?: string
+  aircraftType?: string | null
+  aircraftModel?: string | null
+  operator?: string | null
+  operatorCountry?: string | null
+  registration?: string | null
+  origin?: string | null
+  destination?: string | null
   isInteresting: boolean
-  trail?: number[][]
+  trail?: number[][] | null
 }
 
 export interface MilitaryFlightCluster {

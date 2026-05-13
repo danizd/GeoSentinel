@@ -15,7 +15,7 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
   return (
     <div className="bg-bg-panel border-l border-border-glow h-full flex flex-col">
       <div className="p-4 border-b border-border-glow flex items-center justify-between">
-        <h2 className="font-mono text-sm text-accent-blue">INCIDENT DETAIL</h2>
+        <h2 className="font-mono text-sm text-accent-blue">DETALLE</h2>
         <button
           onClick={() => setSelectedIncident(null)}
           className="text-text-secondary hover:text-text-primary"
@@ -42,13 +42,13 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
         </div>
 
         <div>
-          <div className="font-mono text-xs text-text-secondary mb-1">Category</div>
+          <div className="font-mono text-xs text-text-secondary mb-1">Categoría</div>
           <div className="text-text-primary">{incident.category}</div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="font-mono text-xs text-text-secondary mb-1">Severity</div>
+            <div className="font-mono text-xs text-text-secondary mb-1">Severidad</div>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 bg-bg-base rounded overflow-hidden">
                 <div
@@ -60,7 +60,7 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
             </div>
           </div>
           <div>
-            <div className="font-mono text-xs text-text-secondary mb-1">Confidence</div>
+            <div className="font-mono text-xs text-text-secondary mb-1">Confianza</div>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 bg-bg-base rounded overflow-hidden">
                 <div
@@ -75,7 +75,7 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
 
         {incident.canonical_point && (
           <div>
-            <div className="font-mono text-xs text-text-secondary mb-1">Location</div>
+            <div className="font-mono text-xs text-text-secondary mb-1">Ubicación</div>
             <div className="font-mono text-sm text-text-primary">
               {incident.canonical_point.lat.toFixed(4)}° {incident.canonical_point.lon.toFixed(4)}°
             </div>
@@ -83,7 +83,7 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
         )}
 
         <div>
-          <div className="font-mono text-xs text-text-secondary mb-1">Sources</div>
+          <div className="font-mono text-xs text-text-secondary mb-1">Fuentes</div>
           <div className="flex gap-1">
             {incident.sources.map((source) => (
               <span
@@ -98,13 +98,9 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="font-mono text-xs text-text-secondary mb-1">First Seen</div>
-            <div className="font-mono text-sm text-text-primary">
-              {formatDistanceToNow(new Date(incident.first_seen), { addSuffix: true })}
-            </div>
-          </div>
-          <div>
-            <div className="font-mono text-xs text-text-secondary mb-1">Last Seen</div>
+<div className="font-mono text-xs text-text-secondary mb-1">1ª detección</div>
+
+            <div className="font-mono text-xs text-text-secondary mb-1">Última detección</div>
             <div className="font-mono text-sm text-text-primary">
               {formatDistanceToNow(new Date(incident.last_seen), { addSuffix: true })}
             </div>
@@ -112,7 +108,7 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
         </div>
 
         <div>
-          <div className="font-mono text-xs text-text-secondary mb-1">Observations</div>
+          <div className="font-mono text-xs text-text-secondary mb-1">Observaciones</div>
           <div className="text-text-primary">{incident.observation_count}</div>
         </div>
       </div>

@@ -8,15 +8,15 @@ import { AlertTriangle, Activity, Database, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
 const ACTIVE_SOURCES = [
-  { name: 'USGS', label: 'USGS Earthquakes', desc: 'Terremotos >= 4.0M' },
+  { name: 'USGS', label: 'USGS', desc: 'Terremotos >= 4.0M' },
   { name: 'FIRMS', label: 'NASA FIRMS', desc: 'Incendios activos (VIIRS/MODIS)' },
-  { name: 'GDELT', label: 'GDELT Cloud v2', desc: 'Eventos de conflicto globales' },
+  { name: 'GDELT', label: 'GDELT Cloud v2', desc: 'Conflictos globales' },
   { name: 'ACLED', label: 'ACLED', desc: 'Conflictos estructurados' },
+  { name: 'OPENSKY', label: 'OpenSky Network', desc: 'Vuelos militares (relay)' },
 ]
 
 const PENDING_SOURCES = [
-  { name: 'ADSB', label: 'ADS-B Exchange', desc: 'Seguimiento de vuelos (comercial)' },
-  { name: 'MT', label: 'MarineTraffic', desc: 'Seguimiento de barcos AIS (comercial)' },
+  { name: 'MT', label: 'MarineTraffic', desc: 'Tráfico naval AIS (comercial)' },
   { name: 'LUM', label: 'Liveuamap', desc: 'Conflictos geolocalizados (sin API)' },
 ]
 
@@ -37,7 +37,7 @@ export function Dashboard() {
       <div className="flex items-center justify-between px-4 py-2 bg-bg-panel border-b border-border-glow">
         <div className="flex items-center gap-2">
           <Activity className="text-accent-blue" size={20} />
-          <span className="font-mono text-lg font-bold tracking-wider">GEO SENTINEL</span>
+          <span className="font-mono text-lg font-bold tracking-wider">GeoSentinel</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex gap-1">
@@ -47,7 +47,7 @@ export function Dashboard() {
                 layers.scatter ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
               }`}
             >
-              SCATTER
+              PUNTOS
             </button>
             <button
               onClick={() => toggleLayer('heat')}
@@ -55,7 +55,7 @@ export function Dashboard() {
                 layers.heat ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
               }`}
             >
-              HEAT
+              CALOR
             </button>
             <button
               onClick={() => toggleLayer('aoi')}
@@ -63,7 +63,7 @@ export function Dashboard() {
                 layers.aoi ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
               }`}
             >
-              AOI
+              ZONAS
             </button>
             <button
               onClick={() => toggleLayer('tracks')}
@@ -78,7 +78,7 @@ export function Dashboard() {
             <div className="flex items-center gap-2 text-xs text-text-secondary">
               <div className="animate-spin h-3 w-3 border border-accent-blue border-t-transparent rounded-full" />
               <span className="font-mono">
-                UPDATED {dataUpdatedAt ? Math.floor((Date.now() - dataUpdatedAt) / 1000) + 's ago' : ''}
+                UPDATED → {dataUpdatedAt ? 'hace ' + Math.floor((Date.now() - dataUpdatedAt) / 1000) + 's' : ''}
               </span>
             </div>
           )}
@@ -112,7 +112,7 @@ export function Dashboard() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <AlertTriangle size={12} className="text-accent-amber" />
-            <span>System operational</span>
+            <span>Sin novedades</span>
           </div>
           <div className="relative">
             <button
@@ -125,19 +125,19 @@ export function Dashboard() {
             </button>
             {showSources && (
               <div className="absolute bottom-full left-0 mb-1 w-64 bg-bg-panel border border-border-glow rounded shadow-lg p-2 z-50">
-                <div className="text-xs font-bold text-accent-blue mb-1">FUENTES ACTIVAS</div>
+                <div className="text-xs font-bold text-accent-blue mb-1">ACTIVAS</div>
                 {ACTIVE_SOURCES.map(s => (
                   <div key={s.name} className="flex items-center gap-2 py-0.5">
                     <span className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-text-primary font-semibold">{s.label}</span>
+                    <span className="text-text-primary font-semibold text-[11px]">{s.label}</span>
                     <span className="text-text-secondary text-[10px]">{s.desc}</span>
                   </div>
                 ))}
-                <div className="text-xs font-bold text-text-secondary mt-2 mb-1">FUENTES PENDIENTES</div>
+                <div className="text-xs font-bold text-text-secondary mt-2 mb-1">PENDIENTES</div>
                 {PENDING_SOURCES.map(s => (
                   <div key={s.name} className="flex items-center gap-2 py-0.5">
                     <span className="w-2 h-2 rounded-full bg-gray-600" />
-                    <span className="text-text-secondary font-semibold">{s.label}</span>
+                    <span className="text-text-secondary font-semibold text-[11px]">{s.label}</span>
                     <span className="text-text-secondary text-[10px]">{s.desc}</span>
                   </div>
                 ))}
@@ -146,7 +146,7 @@ export function Dashboard() {
           </div>
         </div>
         <div>
-          {data?.total || 0} active incidents
+          {data?.total || 0} incidentes activos
         </div>
       </div>
     </div>

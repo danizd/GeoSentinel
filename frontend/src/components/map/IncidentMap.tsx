@@ -3,9 +3,10 @@ import Map, { NavigationControl, Source, Layer } from 'react-map-gl'
 import { useMapStore } from '../../stores/mapStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMilitaryFlights, type MilitaryFlight } from '../../api/military'
+import { fetchAois } from '../../api/aois'
 import type { Incident } from '../../types/incident'
 
-function getMilitaryColor(country?: string): string {
+function getMilitaryColor(country?: string | null): string {
   const mapping: Record<string, string> = {
     'United States': '#3B82F6',
     'United Kingdom': '#06B6D4',
@@ -160,6 +161,24 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     enabled: layers.tracks,
   })
 
+  const { data: aoiData } = useQuery({
+    queryKey: ['aois'],
+    queryFn: fetchAois,
+    enabled: layers.aoi,
+  })
+
+  const aoiGeojson = useMemo(() => {
+    if (!aoiData?.aois?.length) return null
+    return {
+      type: 'FeatureCollection' as const,
+      features: aoiData.aois.map(a => ({
+        type: 'Feature' as const,
+        properties: { id: a.aoi_id, name: a.name },
+        geometry: a.geometry,
+      })),
+    }
+  }, [aoiData])
+
   const flights = useMemo(() => {
     if (!militaryData?.flights) return []
     return militaryData.flights.filter(f =>
@@ -299,6 +318,31 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
           </Source>
         )}
 
+        {layers.aoi && aoiGeojson && (
+          <Source id="aoi-zones" type="geojson" data={aoiGeojson}>
+            <Layer
+              id="aoi-fill"
+              type="fill"
+              source="aoi-zones"
+              paint={{
+                'fill-color': '#ff1100',
+                'fill-opacity': 0.32,
+              }}
+            />
+            <Layer
+              id="aoi-outline"
+              type="line"
+              source="aoi-zones"
+              paint={{
+                'line-color': '#3B82F6',
+                'line-width': 2,
+                'line-opacity': 0.7,
+                'line-dasharray': [3, 2],
+              }}
+            />
+          </Source>
+        )}
+
         {layers.tracks && flights.length > 0 && (
           <>
             <AircraftIconManager flights={flights} />
@@ -310,7 +354,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       </Map>
 
       {selectedFlight && (
-        <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-52 z-50">
+        <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-56 z-50 max-h-[70vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getMilitaryColor(selectedFlight.operatorCountry) }} />
@@ -319,44 +363,64 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
             <button onClick={() => setSelectedFlight(null)} className="text-text-secondary hover:text-white text-lg leading-none">&times;</button>
           </div>
           <div className="space-y-1 text-text-secondary">
-            <div className="flex justify-between"><span className="text-text-primary">Hex</span> <span>{selectedFlight.hexCode}</span></div>
-            <div className="flex justify-between"><span className="text-text-primary">Alt</span> <span>{selectedFlight.altitude.toLocaleString()} ft</span></div>
-            <div className="flex justify-between"><span className="text-text-primary">Spd</span> <span>{selectedFlight.speed} kts</span></div>
-            <div className="flex justify-between"><span className="text-text-primary">Hdg</span> <span>{selectedFlight.heading}&deg;</span></div>
-            {selectedFlight.operatorCountry && (
-              <div className="flex justify-between"><span className="text-text-primary">Country</span> <span>{selectedFlight.operatorCountry}</span></div>
-            )}
+            <div className="flex justify-between"><span className="text-text-primary">Hex</span> <span className="font-mono">{selectedFlight.hexCode}</span></div>
+            <div className="flex justify-between"><span className="text-text-primary">Country</span> <span>{selectedFlight.operatorCountry || '—'}</span></div>
             {selectedFlight.aircraftType && (
-              <div className="flex justify-between"><span className="text-text-primary">Type</span> <span>{selectedFlight.aircraftType}</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Tipo</span> <span>{selectedFlight.aircraftType}</span></div>
+            )}
+            {selectedFlight.aircraftModel && (
+              <div className="flex justify-between"><span className="text-text-primary">Modelo</span> <span>{selectedFlight.aircraftModel}</span></div>
+            )}
+            {selectedFlight.registration && (
+              <div className="flex justify-between"><span className="text-text-primary">Matrícula</span> <span className="font-mono">{selectedFlight.registration}</span></div>
             )}
             {selectedFlight.operator && (
-              <div className="flex justify-between"><span className="text-text-primary">Op</span> <span>{selectedFlight.operator}</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Operador</span> <span>{selectedFlight.operator}</span></div>
             )}
-            <div className="flex justify-between pt-1 border-t border-border-glow">
-              <span className="text-text-primary">Lat</span> <span>{selectedFlight.location.latitude.toFixed(4)}</span>
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Alt</span> <span>{selectedFlight.altitude.toLocaleString()} ft</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Vel</span> <span>{selectedFlight.speed} kts</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Rumbo</span> <span>{selectedFlight.heading}&deg;</span></div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-text-primary">Lon</span> <span>{selectedFlight.location.longitude.toFixed(4)}</span>
+            {(selectedFlight.origin || selectedFlight.destination) && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                {selectedFlight.origin && (
+                  <div className="flex justify-between"><span className="text-text-primary">Origen</span> <span>{selectedFlight.origin}</span></div>
+                )}
+                {selectedFlight.destination && (
+                  <div className="flex justify-between"><span className="text-text-primary">Destino</span> <span>{selectedFlight.destination}</span></div>
+                )}
+              </div>
+            )}
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Lat</span> <span className="font-mono">{selectedFlight.location.latitude.toFixed(4)}</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Lon</span> <span className="font-mono">{selectedFlight.location.longitude.toFixed(4)}</span></div>
             </div>
+            {selectedFlight.lastSeenAt && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="flex justify-between"><span className="text-text-primary">Visto</span> <span>{new Date(selectedFlight.lastSeenAt).toLocaleTimeString()}</span></div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       <button
         onClick={() => setIs3D(!is3D)}
-        className="absolute top-14 right-2 bg-accent-blue text-white px-3 py-2 text-sm font-bold rounded shadow-lg hover:bg-accent-blue/80 transition-colors"
+        className="absolute top-18
+         right-2 bg-accent-blue text-white px-3 py-2 text-sm font-bold rounded shadow-lg hover:bg-accent-blue/80 transition-colors"
       >
         {is3D ? '2D' : '3D'}
       </button>
 
       {layers.tracks && militaryLoading && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent-blue text-white text-sm font-mono px-4 py-2 rounded shadow-lg animate-pulse z-50">
-          Loading tracks...
+          Cargando tracks...
         </div>
       )}
 
       {layers.tracks && militaryData?.isStale && (
-        <div className="absolute top-14 right-2 bg-yellow-600 text-white text-xs px-2 py-1 rounded z-50">
+        <div className="absolute top-16 right-2 bg-yellow-600 text-white text-xs px-2 py-1 rounded z-50">
           Stale data
         </div>
       )}
