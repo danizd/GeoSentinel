@@ -4,6 +4,7 @@ import { useMapStore } from '../../stores/mapStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMilitaryFlights, type MilitaryFlight } from '../../api/military'
 import { fetchAois } from '../../api/aois'
+import { fetchAISVessels, type AISVessel } from '../../api/ais'
 import type { Incident } from '../../types/incident'
 
 function getMilitaryColor(country?: string | null): string {
@@ -17,6 +18,91 @@ function getMilitaryColor(country?: string | null): string {
   }
   if (!country) return '#FFFFFF'
   return mapping[country] || '#FBBF24'
+}
+
+function getVesselColor(flag?: string | null): string {
+  const mapping: Record<string, string> = {
+    'US': '#3B82F6',
+    'GB': '#06B6D4',
+    'RU': '#EF4444',
+    'CN': '#EAB308',
+    'FR': '#A855F7',
+    'IR': '#F97316',
+    'TR': '#EAB308',
+    'AU': '#22C55E',
+    'IT': '#A855F7',
+  }
+  if (!flag) return '#94A3B8'
+  return mapping[flag.toUpperCase()] || '#94A3B8'
+}
+
+function VesselsIconManager({ vessels }: { vessels: AISVessel[] }) {
+  const geojson = useMemo(() => {
+    if (!vessels.length) return null
+    return {
+      type: 'FeatureCollection' as const,
+      features: vessels.map(v => ({
+        type: 'Feature' as const,
+        properties: {
+          id: v.id,
+          name: v.name,
+          heading: v.heading,
+          color: getVesselColor(v.flag),
+          isDark: v.isDark,
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [v.location.longitude, v.location.latitude],
+        },
+      })),
+    }
+  }, [vessels])
+
+  if (!geojson) return null
+
+  return (
+    <Source id="ais-vessels-src" type="geojson" data={geojson}>
+      <Layer
+        id="ais-vessels-halo-dark"
+        type="circle"
+        source="ais-vessels-src"
+        paint={{
+          'circle-radius': ['case', ['get', 'isDark'], 18, 14],
+          'circle-color': '#000000',
+          'circle-opacity': ['case', ['get', 'isDark'], 0.4, 0.35],
+          'circle-stroke-width': 0,
+        }}
+      />
+      <Layer
+        id="ais-vessels-halo-light"
+        type="circle"
+        source="ais-vessels-src"
+        paint={{
+          'circle-radius': ['case', ['get', 'isDark'], 14, 10],
+          'circle-color': '#FFFFFF',
+          'circle-opacity': ['case', ['get', 'isDark'], 0.4, 0.3],
+          'circle-stroke-width': 0,
+        }}
+      />
+      <Layer
+        id="ais-vessels-symbol"
+        type="symbol"
+        source="ais-vessels-src"
+        layout={{
+          'icon-image': 'ship-icon',
+          'icon-size': 0.35,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'icon-rotate': ['get', 'heading'],
+          'icon-rotation-alignment': 'map',
+        }}
+        paint={{
+          'icon-color': ['get', 'color'],
+          'icon-opacity': ['case', ['get', 'isDark'], 0.7, 0.95],
+        }}
+      />
+    </Source>
+  )
 }
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || ''
@@ -153,6 +239,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
   const { viewport, layers } = useMapStore()
   const [is3D, setIs3D] = useState(true)
   const [selectedFlight, setSelectedFlight] = useState<MilitaryFlight | null>(null)
+  const [selectedVessel, setSelectedVessel] = useState<AISVessel | null>(null)
 
   const { data: militaryData, isLoading: militaryLoading } = useQuery({
     queryKey: ['military-flights'],
@@ -166,6 +253,24 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     queryFn: fetchAois,
     enabled: layers.aoi,
   })
+
+  const { data: aisData } = useQuery({
+    queryKey: ['ais-vessels'],
+    queryFn: fetchAISVessels,
+    refetchInterval: POLLING_INTERVAL_MS,
+    enabled: layers.vessels,
+  })
+
+  const vessels = useMemo(() => {
+    if (!aisData?.vessels) return []
+    return aisData.vessels.filter(v =>
+      v.location &&
+      typeof v.location.longitude === 'number' &&
+      typeof v.location.latitude === 'number' &&
+      !isNaN(v.location.longitude) &&
+      !isNaN(v.location.latitude)
+    )
+  }, [aisData])
 
   const aoiGeojson = useMemo(() => {
     if (!aoiData?.aois?.length) return null
@@ -240,23 +345,47 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       }
     }
     img.src = canvas.toDataURL()
+
+    const shipCanvas = document.createElement('canvas')
+    shipCanvas.width = 48
+    shipCanvas.height = 48
+    const sctx = shipCanvas.getContext('2d')!
+    sctx.font = 'bold 36px sans-serif'
+    sctx.textAlign = 'center'
+    sctx.textBaseline = 'middle'
+    sctx.fillStyle = '#FFFFFF'
+    sctx.fillText('\u26F5', 24, 24)
+    const shipImg = new Image()
+    shipImg.onload = () => {
+      if (!map.hasImage('ship-icon')) {
+        map.addImage('ship-icon', shipImg, { sdf: true })
+      }
+    }
+    shipImg.src = shipCanvas.toDataURL()
   }, [])
 
-  const handleFlightClick = (e: any) => {
+  const handleMapClick = (e: any) => {
     const features = e.features || []
     for (const feature of features) {
-      if (feature.layer?.id === 'military-flights-symbol' || feature.source === 'military-flights-src') {
-        const props = feature.properties
+      const layerId = feature.layer?.id
+      const props = feature.properties
+
+      if (layerId === 'military-flights-symbol' || feature.source === 'military-flights-src') {
         if (props?.id) {
           const flight = flights.find(f => f.id === props.id)
-          if (flight) {
-            setSelectedFlight(flight)
-            return
-          }
+          if (flight) { setSelectedFlight(flight); return }
+        }
+      }
+
+      if (layerId === 'ais-vessels-symbol' || feature.source === 'ais-vessels-src') {
+        if (props?.id) {
+          const vessel = vessels.find(v => v.id === props.id)
+          if (vessel) { setSelectedVessel(vessel); return }
         }
       }
     }
     setSelectedFlight(null)
+    setSelectedVessel(null)
   }
 
   return (
@@ -264,8 +393,8 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       <Map
         initialViewState={displayViewport}
         onLoad={handleMapLoad}
-        onClick={handleFlightClick}
-        interactiveLayerIds={['military-flights-symbol']}
+        onClick={handleMapClick}
+        interactiveLayerIds={['military-flights-symbol', 'ais-vessels-symbol']}
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' } as any}
         mapStyle={is3D ? MAP_STYLE_3D : MAP_STYLE_2D}
         mapboxAccessToken={MAPBOX_TOKEN}
@@ -350,6 +479,10 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
           </>
         )}
 
+        {layers.vessels && vessels.length > 0 && (
+          <VesselsIconManager vessels={vessels} />
+        )}
+
         <NavigationControl position="top-right" />
       </Map>
 
@@ -401,6 +534,47 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
                 <div className="flex justify-between"><span className="text-text-primary">Visto</span> <span>{new Date(selectedFlight.lastSeenAt).toLocaleTimeString()}</span></div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {selectedVessel && (
+        <div className="absolute bottom-4 left-4 bg-bg-panel border border-accent-amber rounded-lg p-3 shadow-xl font-mono text-xs w-56 z-50 max-h-[70vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getVesselColor(selectedVessel.flag) }} />
+              <span className="text-accent-amber font-bold text-sm">{selectedVessel.name || selectedVessel.callsign || selectedVessel.mmsi}</span>
+            </div>
+            <button onClick={() => setSelectedVessel(null)} className="text-text-secondary hover:text-white text-lg leading-none">&times;</button>
+          </div>
+          <div className="space-y-1 text-text-secondary">
+            <div className="flex justify-between"><span className="text-text-primary">MMSI</span> <span className="font-mono">{selectedVessel.mmsi}</span></div>
+            {selectedVessel.callsign && (
+              <div className="flex justify-between"><span className="text-text-primary">Call</span> <span>{selectedVessel.callsign}</span></div>
+            )}
+            <div className="flex justify-between"><span className="text-text-primary">Bandera</span> <span>{selectedVessel.flag || '—'}</span></div>
+            {selectedVessel.vesselType && (
+              <div className="flex justify-between"><span className="text-text-primary">Tipo</span> <span>{selectedVessel.vesselType}</span></div>
+            )}
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Vel</span> <span>{selectedVessel.sog} kn</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Rumbo</span> <span>{selectedVessel.cog}&deg;</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Status</span> <span>{selectedVessel.navigationalStatus}</span></div>
+            </div>
+            {selectedVessel.destination && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="flex justify-between"><span className="text-text-primary">Destino</span> <span>{selectedVessel.destination}</span></div>
+              </div>
+            )}
+            {selectedVessel.isDark && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="flex justify-between"><span className="text-text-primary">Estado</span> <span className="text-accent-amber">Dark ship</span></div>
+              </div>
+            )}
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Lat</span> <span className="font-mono">{selectedVessel.location.latitude.toFixed(4)}</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Lon</span> <span className="font-mono">{selectedVessel.location.longitude.toFixed(4)}</span></div>
+            </div>
           </div>
         </div>
       )}

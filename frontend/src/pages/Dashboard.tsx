@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { fetchIncidents } from '../api/incidents'
 import { useFilterStore, useMapStore } from '../stores/mapStore'
 import { IncidentMap } from '../components/map/IncidentMap'
@@ -39,6 +40,12 @@ export function Dashboard() {
           <Activity className="text-accent-blue" size={20} />
           <span className="font-mono text-lg font-bold tracking-wider">GeoSentinel</span>
         </div>
+        <Link
+          to="/info"
+          className="text-xs text-white hover:text-white transition-colors font-medium"
+        >
+          INFORMACIÓN
+        </Link>
         <div className="flex items-center gap-4">
           <div className="flex gap-1">
             <button
@@ -71,7 +78,15 @@ export function Dashboard() {
                 layers.tracks ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
               }`}
             >
-              TRACKS
+              VUELOS
+            </button>
+            <button
+              onClick={() => toggleLayer('vessels')}
+              className={`px-2 py-1 text-xs font-mono rounded border ${
+                layers.vessels ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
+              }`}
+            >
+              BUQUES
             </button>
           </div>
           {isFetching && (
