@@ -191,53 +191,310 @@ Vuelos que no cumplen ninguna condición → registrar en
 - Datos de origen/destino solo en contextos con scope `incidents:read`
   y solo si `operatorCountry` no es aliado sensible (decisión operacional)
 
-## 9. Visualización en frontend
+## 9. Visualización en frontend — implementación detallada
 
-Ver `F-UI-MAP`. Las capas específicas para vuelos militares son:
+Ver `F-UI-MAP`. Esta sección documenta la solución final y los problemas
+que llevaron a ella.
 
-### Arquitectura de renderizado
+---
 
-El frontend **NO usa DeckGL** para las capas de vuelos militares. Usa capas **nativas de Mapbox GL JS** (symbol + circle layers) porque:
-- `IconLayer` de DeckGL es incompatible con `MapboxOverlay` (no comparte texturas en el contexto WebGL de Mapbox)
-- La arquitectura DeckGL-como-raíz obliga a renunciar al globo 3D
-- Las capas nativas de Mapbox soportan globo 3D, SDF, rotación por propiedad y colorización dinámica sin depender de texturas WebGL externas
+### 9.1 Historial de intentos fallidos
 
-### Registro del icono
+El camino hasta la solución actual pasó por múltiples iteraciones.
+Cada una falló por una razón específica. Se documentan aquí para evitar
+repetirlas.
 
-El icono del avión (✈ Unicode) se registra como imagen SDF en el evento `onLoad` del mapa:
-1. Se renderiza el carácter ✈ en un `<canvas>` de 48×48px con `fillText`
-2. El canvas se convierte a `Image` vía `canvas.toDataURL()`
-3. La imagen se añade al estilo del mapa con `map.addImage('airplane-icon', img, { sdf: true })`
+#### Intento 1: IconLayer de DeckGL con PNG externo
+```
+DeckGL > MapboxOverlay > IconLayer(iconAtlas: '/avion.png')
+```
+- **Síntoma**: el icono nunca se renderizaba.
+- **Causa**: `MapboxOverlay` comparte el contexto WebGL de Mapbox GL JS.
+  `IconLayer` intenta crear una textura desde una URL externa, pero la
+  carga asíncrona de la imagen no se completa antes del primer frame.
+  DeckGL no lanza error, simplemente no pinta.
+- **Conclusión**: `IconLayer` + textura desde URL es incompatible con
+  `MapboxOverlay`.
 
-### Capas Mapbox (en orden z)
+#### Intento 2: IconLayer con SVG data URL inline (`encodeURIComponent`)
+```
+IconLayer(iconAtlas: 'data:image/svg+xml,...')
+```
+- **Síntoma**: igual que el intento 1. Sin errores, sin renderizado.
+- **Causa**: aunque el data URL se resuelve sincrónicamente, la
+  decodificación del SVG a textura WebGL falla en el contexto prestado
+  de Mapbox.
+- **Conclusión**: el formato de imagen (PNG/SVG/data URL) no es el
+  problema; el problema es el contexto WebGL.
 
-| Capa | Tipo | Propósito |
-|------|------|-----------|
-| `military-flights-halo-dark` | `circle` | Halo exterior oscuro (14px, opacity 0.35) — contraste sobre zonas claras |
-| `military-flights-halo-light` | `circle` | Halo interior blanco (10px, opacity 0.3) — contraste sobre zonas oscuras |
-| `military-flights-symbol` | `symbol` | Icono ✈ SDF, rotado por `heading`, coloreado por `operatorCountry`, `icon-rotation-alignment: map` |
-| `military-trails-line` | `line` | Trails de vuelo (GeoJSON LineString), color por país, opacity 0.5 |
+#### Intento 3: IconLayer con `<canvas>` HTML generado en módulo
+```
+const atlas = buildAirplaneAtlas()  // canvas.toDataURL()
+IconLayer(iconAtlas: atlas)
+```
+- **Síntoma**: renderizado intermitente. A veces visible, a veces no.
+- **Causa**: el canvas se crea una vez al cargar el módulo. Cuando
+  `setProps({ layers })` actualiza las capas en el overlay, la textura
+  ya está resuelta pero el contexto WebGL de Mapbox la descarta en
+  ciertos frames.
+- **Conclusión**: inconsistente. No apto para producción.
 
-### Selección y popup
+#### Intento 4: DeckGL como raíz (sin MapboxOverlay)
+```
+DeckGL(controller=true) > Map(react-map-gl)
+```
+- **Síntoma**: los iconos se renderizan pero **no se anclan al globo 3D**.
+  En 3D, los puntos flotan en el espacio.
+- **Causa**: DeckGL usa proyección Web Mercator plana; Mapbox en modo
+  globo usa proyección esférica. Las coordenadas no coinciden cuando hay
+  `pitch > 0` o `projection: 'globe'`.
+- **Conclusión**: DeckGL no soporta globo 3D de Mapbox. Forzar 2D
+  Mercator resuelve el anclaje pero **pierde el globo 3D**, que es
+  un requisito de la aplicación.
 
-- Click sobre el icono → `onClick` del Map filtra features de `military-flights-symbol`
-- Al seleccionar un vuelo → panel fijo `absolute bottom-4 right-4` con info completa
-- El panel muestra: callsign, hex, altitud, velocidad, rumbo, país, tipo, operador, lat/lon
-- Click fuera o botón × cierra el panel
+#### Intento 5: Marcadores HTML DOM (`<Marker>` con ✈ Unicode)
+```
+<Marker longitude={...} latitude={...}>
+  <div style={{ transform: `rotate(${heading}deg)` }}>✈</div>
+</Marker>
+```
+- **Síntoma**: los marcadores no se anclan correctamente. Flotan al
+  mover el mapa.
+- **Causa**: `react-map-gl` v7 + proyección globo no sincroniza bien
+  la posición de `Marker` en el viewport.
+- **Conclusión**: viola D12 de AGENTS.md. Descartado.
 
-### Mapa de colores por país
+---
+
+### 9.2 Solución final: Mapbox SDF con ✈ renderizado en canvas
+
+#### Arquitectura
+
+```
+Map (react-map-gl, dueño del canvas)
+  └── Source (GeoJSON de flights)
+        ├── Layer circle (halo oscuro)
+        ├── Layer circle (halo claro)
+        └── Layer symbol (SDF ✈, rotado, coloreado)
+```
+
+No se usa DeckGL para las capas militares. Todo es nativo de Mapbox GL JS.
+
+#### ¿Por qué funciona?
+
+1. **Sin texturas WebGL externas**: el icono se registra como `Image`
+   HTML estándar, no como textura WebGL de DeckGL. Mapbox lo convierte
+   internamente a su atlas de texturas.
+2. **SDF (Signed Distance Field)**: `map.addImage('airplane-icon', img, { sdf: true })`.
+   El modo SDF permite que Mapbox coloree dinámicamente el icono con
+   `icon-color` y lo escale sin pérdida de calidad.
+3. **`icon-rotation-alignment: 'map'`**: el icono rota respecto al norte
+   geográfico, no respecto a la pantalla. Esto es esencial para que el
+   rumbo del avión se muestre correctamente en el globo 3D.
+4. **Renderizado nativo**: al ser capas de Mapbox (no de DeckGL), el
+   globo 3D, el pitch y el bearing funcionan sin problemas.
+
+#### Registro del icono (detalle de implementación)
+
+El icono ✈ se genera en el evento `onLoad` del mapa:
 
 ```typescript
-const COUNTRY_COLORS: Record<string, string> = {
-  'United States': '#3B82F6',  // blue
-  'United Kingdom': '#06B6D4',  // cyan
-  'Russia': '#EF4444',          // red
-  'China': '#EAB308',           // yellow
-  'France': '#A855F7',          // purple
-  'Luxembourg': '#84CC16',      // lime
-   default: '#FBBF24',          // orange
+// IncidentMap.tsx — handleMapLoad
+const handleMapLoad = useCallback((e: any) => {
+  const map = e.target
+
+  // 1. Crear canvas 48×48 con el carácter ✈ centrado
+  const size = 48
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.font = 'bold 36px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillText('\u2708', size / 2, size / 2)
+
+  // 2. Convertir canvas a Image (requerido por map.addImage)
+  const img = new Image()
+  img.onload = () => {
+    if (!map.hasImage('airplane-icon')) {
+      // 3. Registrar como SDF para colorización dinámica
+      map.addImage('airplane-icon', img, { sdf: true })
+    }
+  }
+  img.src = canvas.toDataURL()
+}, [])
+```
+
+**Por qué `onLoad` y no `useEffect` con `useMap()`**:
+- `useMap()` dentro de un componente hijo puede devolver `null` si el
+  mapa aún no está montado.
+- `onLoad` se dispara exactamente cuando el mapa está listo para aceptar
+  imágenes. Es el momento canónico para `addImage()`.
+
+#### Contraste: sistema de doble halo
+
+El icono ✈ por sí solo no tiene suficiente contraste contra fondos
+variables (satélite oscuro, calles claras, nubes). Se usa un sistema de
+**doble halo** mediante dos capas `circle` debajo del icono:
+
+```
+Capa halo-dark (circle, #000, 14px, 35% opacity)
+  └── Capa halo-light (circle, #FFF, 10px, 30% opacity)
+        └── Capa symbol (✈ SDF, color país, 95% opacity)
+```
+
+```json
+// Capa 1: halo exterior oscuro — contraste sobre zonas claras (nubes, desierto)
+{
+  "id": "military-flights-halo-dark",
+  "type": "circle",
+  "paint": {
+    "circle-radius": 14,
+    "circle-color": "#000000",
+    "circle-opacity": 0.35
+  }
+}
+
+// Capa 2: halo interior blanco — contraste sobre zonas oscuras (satélite, mar)
+{
+  "id": "military-flights-halo-light",
+  "type": "circle",
+  "paint": {
+    "circle-radius": 10,
+    "circle-color": "#FFFFFF",
+    "circle-opacity": 0.3
+  }
+}
+
+// Capa 3: icono del avión
+{
+  "id": "military-flights-symbol",
+  "type": "symbol",
+  "layout": {
+    "icon-image": "airplane-icon",
+    "icon-size": 0.35,
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-rotate": ["get", "heading"],
+    "icon-rotation-alignment": "map"
+  },
+  "paint": {
+    "icon-color": ["get", "color"],
+    "icon-opacity": 0.95
+  }
 }
 ```
 
-La capa de vuelos militares se activa desde el control
-`[TRACKS]` en `LayerControls` (`F-UI-MAP §5`).
+**Por qué dos halos**: un solo halo blanco es invisible sobre fondo
+claro (desierto, nubes). Un solo halo negro es invisible sobre fondo
+oscuro (satélite, mar). La combinación de ambos garantiza contraste
+en cualquier terreno.
+
+#### Datos: GeoJSON generado desde la API
+
+Los flights se convierten a GeoJSON en un `useMemo`:
+
+```typescript
+const geojson = useMemo(() => ({
+  type: 'FeatureCollection' as const,
+  features: flights.map(f => ({
+    type: 'Feature' as const,
+    properties: {
+      id: f.id,
+      callsign: f.callsign,
+      heading: f.heading,
+      color: getMilitaryColor(f.operatorCountry),
+    },
+    geometry: {
+      type: 'Point' as const,
+      coordinates: [f.location.longitude, f.location.latitude],
+    },
+  })),
+}), [flights])
+```
+
+Las propiedades `heading` y `color` se usan como data-driven properties
+en las capas Mapbox (`["get", "heading"]`, `["get", "color"]`).
+
+#### Selección de vuelo y popup
+
+El click se captura con el evento `onClick` del componente `Map` de
+react-map-gl, filtrando por `interactiveLayerIds`:
+
+```typescript
+<Map
+  onClick={handleFlightClick}
+  interactiveLayerIds={['military-flights-symbol']}
+  ...
+>
+```
+
+```typescript
+const handleFlightClick = (e: any) => {
+  const features = e.features || []
+  for (const feature of features) {
+    if (feature.layer?.id === 'military-flights-symbol'
+        || feature.source === 'military-flights-src') {
+      const props = feature.properties
+      if (props?.id) {
+        const flight = flights.find(f => f.id === props.id)
+        if (flight) {
+          setSelectedFlight(flight)
+          return
+        }
+      }
+    }
+  }
+  setSelectedFlight(null)  // click fuera = deseleccionar
+}
+```
+
+El popup es un panel **fijo** (no un Marker) posicionado con
+`absolute bottom-4 right-4` para que no se mueva con el mapa:
+
+```typescript
+{selectedFlight && (
+  <div className="absolute bottom-4 right-4 ...">
+    <div>Callsign: {selectedFlight.callsign}</div>
+    <div>Hex: {selectedFlight.hexCode}</div>
+    <div>Alt: {selectedFlight.altitude} ft</div>
+    <div>Spd: {selectedFlight.speed} kts</div>
+    <div>Hdg: {selectedFlight.heading}°</div>
+    <div>Country: {selectedFlight.operatorCountry}</div>
+    {selectedFlight.aircraftType && <div>Type: {selectedFlight.aircraftType}</div>}
+    {selectedFlight.aircraftModel && <div>Model: {selectedFlight.aircraftModel}</div>}
+    {selectedFlight.registration && <div>Reg: {selectedFlight.registration}</div>}
+  </div>
+)}
+```
+
+#### Mapa de colores por país
+
+```typescript
+function getMilitaryColor(country?: string | null): string {
+  const mapping: Record<string, string> = {
+    'United States': '#3B82F6',   // blue
+    'United Kingdom': '#06B6D4',   // cyan
+    'Russia':         '#EF4444',   // red
+    'China':          '#EAB308',   // yellow
+    'France':         '#A855F7',   // purple
+    'Luxembourg':     '#84CC16',   // lime
+  }
+  if (!country) return '#FFFFFF'
+  return mapping[country] || '#FBBF24'  // default: orange
+}
+```
+
+---
+
+### 9.3 Lecciones aprendidas
+
+| Problema | Causa raíz | Solución |
+|----------|-----------|----------|
+| IconLayer no renderiza | MapboxOverlay = contexto WebGL ajeno | Renderizado nativo Mapbox |
+| Icono flota en globo 3D | DeckGL no soporta proyección globo | Capas nativas Mapbox con `icon-rotation-alignment: map` |
+| SDF no se carga a tiempo | `useMap()` retorna null antes de mount | `onLoad` del Map como punto de registro |
+| Sin contraste en satélite | Fondo variable (claro/oscuro) | Doble halo (oscuro + blanco) |
+| Popup se mueve con el mapa | `Marker` sigue coordenadas geográficas | Panel fijo con `absolute` positioning |
