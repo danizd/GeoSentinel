@@ -3,6 +3,7 @@
 ## REGLA OBLIGATORIA
 **Antes de escribir cualquier código**, leer las specs indicadas en la tabla de enrutamiento.
 Si una tarea toca datos → cargar `E-MODEL`. Si toca fuente externa → cargar `E-SOURCES`.
+Si toca cualquier componente frontend → cargar `E-ARCH-FRONT`.
 Si hay conflicto entre spec funcional y estructural → **la estructural prevalece**.
 Si falta información en las specs → señalarlo. **No inventar.**
 
@@ -14,7 +15,8 @@ Si falta información en las specs → señalarlo. **No inventar.**
 
 | Código | Archivo | Cuándo |
 |--------|---------|--------|
-| `E-ARCH` | `arquitectura.md` | Nuevos componentes, cambios en flujo de datos |
+| `E-ARCH` | `arquitectura.md` | Nuevos componentes backend, cambios en flujo de datos |
+| `E-ARCH-FRONT` | `arquitectura-frontend.md` | **Siempre en tareas frontend** |
 | `E-MODEL` | `modelo-datos.md` | Esquemas SQL, migraciones, modelos Pydantic |
 | `E-SOURCES` | `fuentes-datos.md` | Añadir/modificar/sustituir fuentes externas |
 | `E-SEC` | `seguridad.md` | Auth, secretos, exposición de API |
@@ -31,7 +33,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | `F-ING-ACLED` | `ingesta/acled.md` | Ingestor ACLED |
 | `F-ING-FIRMS` | `ingesta/firms.md` | Ingestor FIRMS NASA |
 | `F-ING-USGS` | `ingesta/usgs.md` | Ingestor USGS terremotos |
-| `F-ING-ADSB` | `ingesta/adsb.md` | Ingestor ADS-B Exchange |
+| `F-ING-MIL` | `ingesta/military-flights.md` | Ingestor Vuelos Militares (OpenSky via relay) |
 | `F-ING-MT` | `ingesta/marinetraffic.md` | Ingestor MarineTraffic AIS |
 | `F-ING-LUM` | `ingesta/liveuamap.md` | Ingestor Liveuamap (riesgo alto) |
 
@@ -62,12 +64,18 @@ Si falta información en las specs → señalarlo. **No inventar.**
 #### UI `ui/`
 | Código | Archivo | Tarea |
 |--------|---------|-------|
-| `F-UI` | `ui/dashboard.md` | Dashboard: mapa, timeline, filtros |
+| `F-UI-DASH` | `ui/dashboard.md` | Layout principal C2, panels, statusbar |
+| `F-UI-MAP` | `ui/mapa-incidentes.md` | Mapbox GL JS + Deck.gl, capas, interacciones |
+| `F-UI-TIEMPO-REAL` | `ui/tiempo-real.md` | Polling TanStack Query, estados de carga |
+| `F-UI-AUTH` | `ui/autenticacion-ui.md` | Login, authStore, protección de rutas |
+| `F-UI-CORR` | `ui/correcciones-ui.md` | UI correcciones humanas, confirmaciones |
+| `F-UI-AOI` | `ui/aoi-ui.md` | Gestión de AOI, dibujo en mapa |
 
 ---
 
 ## Combinaciones de contexto para tareas complejas
 
+### Backend
 | Tarea | Cargar |
 |-------|--------|
 | Nuevo ingestor | `E-ARCH` + `E-SOURCES` + `E-STD` + `E-MON` + `F-ING-[X]` + `F-NORM-CANON` + `F-DEDUP` + `F-VAL` |
@@ -78,10 +86,22 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | Corrección humana | `E-SEC` + `E-MODEL` + `F-API-CORR` + `F-LC` |
 | Infraestructura / CI | `E-INFRA` + `E-SEC` + `E-MON` |
 
+### Frontend
+| Tarea | Cargar |
+|-------|--------|
+| Cualquier componente frontend | `E-ARCH-FRONT` + spec funcional correspondiente |
+| Mapa / capas Deck.gl | `E-ARCH-FRONT` + `F-UI-MAP` + `F-UI-DASH` |
+| Polling / datos en tiempo real | `E-ARCH-FRONT` + `F-UI-TIEMPO-REAL` + `F-UI-DASH` |
+| Autenticación y rutas protegidas | `E-ARCH-FRONT` + `F-UI-AUTH` + `E-SEC` |
+| Panel de correcciones | `E-ARCH-FRONT` + `F-UI-CORR` + `F-UI-AUTH` + `F-API-CORR` |
+| Gestión de AOI en UI | `E-ARCH-FRONT` + `F-UI-AOI` + `F-API-AOI` + `F-UI-MAP` |
+| Setup inicial del proyecto | `E-ARCH-FRONT` + `E-STD` |
+
 ---
 
 ## Decisiones de diseño (no reabrir sin revisión explícita)
 
+### Backend
 | # | Decisión |
 |---|----------|
 | D1 | Todo timestamp en `TIMESTAMPTZ` UTC. Conversión en el mapper, nunca después. |
@@ -92,14 +112,27 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | D6 | AOIs son entidades de primera clase en BD, no filtros ad hoc. |
 | D7 | Incidentes tienen máquina de estados explícita (ver `F-LC`). |
 | D8 | `corrections_audit` es append-only. Nunca UPDATE ni DELETE. |
-| D9 | URLs de FIRMS: nunca hardcodear región ni API key (error original: `Canada_QC/YourMapKey`). |
-| D10 | URL USGS: siempre `?` antes de params (error original: `queryformat=geojson`). |
-| D11 | `fatalities_total` en incidente usa `MAX`, no `SUM` (evitar doble conteo multi-fuente). |
+| D9 | URLs de FIRMS: nunca hardcodear región ni API key. |
+| D10 | URL USGS: siempre `?` antes de params. |
+| D11 | `fatalities_total` usa MAX, no SUM (evitar doble conteo multi-fuente). |
+
+### Frontend
+| # | Decisión |
+|---|----------|
+| D12 | Deck.gl gestiona todas las capas de datos sobre Mapbox. Nunca marcadores DOM en el canvas. |
+| D13 | Lucide React es el único set de iconos. No mezclar con Heroicons. |
+| D14 | Zustand para estado UI. TanStack Query para datos del servidor. No mezclar responsabilidades. |
+| D15 | Framer Motion solo en: pulso de hotspots, fade de panel de detalle, badges de estado. |
+| D16 | Polling cada 30s para incidentes. No WebSockets en esta versión. |
+| D17 | Lista de incidentes virtualizada con `@tanstack/react-virtual` si > 100 items. |
+| D18 | `VITE_MAPBOX_TOKEN` nunca hardcodeada. Siempre desde variables de entorno. |
+| D19 | Token JWT en localStorage (v1). Evaluar httpOnly cookies en versión futura. |
 
 ---
 
-## Convenciones de naming (resumen)
+## Convenciones de naming
 
+### Backend
 | Capa | Patrón |
 |------|--------|
 | Ingestor | `ingestors/<source>_ingestor.py` |
@@ -109,7 +142,19 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | Schema Pydantic | `schemas/<entidad>_schema.py` |
 | Test | `tests/<capa>/test_<modulo>.py` |
 
-## Licencias (restricciones de redistribución en API propia)
+### Frontend
+| Capa | Patrón |
+|------|--------|
+| Componente React | `PascalCase.tsx` |
+| Hook personalizado | `use<Nombre>.ts` |
+| Store Zustand | `<nombre>Store.ts` |
+| Función API | `api/<recurso>.ts` |
+| Tipos globales | `types/<entidad>.ts` |
+| Test | `<Componente>.test.tsx` |
+
+---
+
+## Licencias (restricciones en API propia y frontend)
 
 | Fuente | Licencia | Restricción |
 |--------|----------|-------------|
@@ -117,6 +162,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | ACLED | CC BY-NC 4.0 | Solo uso no comercial |
 | FIRMS | NASA libre | Atribución requerida |
 | USGS | Dominio público | Ninguna |
-| ADS-B Exchange | Comercial | No redistribuir raw |
-| MarineTraffic | Comercial | No redistribuir raw |
+| ADS-B Exchange | Comercial | No redistribuir raw ni exponer `hex` individual |
+| MarineTraffic | Comercial | No redistribuir raw ni exponer `MMSI` individual |
 | Liveuamap | Sin API pública | Riesgo legal propio |
+| Mapbox GL JS | Comercial | Requiere token válido — respetar límites de plan |

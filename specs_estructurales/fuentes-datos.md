@@ -14,7 +14,7 @@
 | ACLED | `field_reported` | Confirmación estructurada | Bajo |
 | FIRMS (NASA) | `sensor` | Detección de incendios | Bajo |
 | USGS | `sensor` | Terremotos tiempo real | Bajo |
-| ADS-B Exchange | `sensor` | Actividad aérea anómala | Medio (comercial) |
+| OpenSky Network | `sensor` | Vuelos militares | Bajo |
 | MarineTraffic | `sensor` | Actividad naval | Medio (comercial) |
 | Liveuamap | `media_derived` | Detección rápida conflictos | **Alto** (sin API pública) |
 | ReliefWeb | `field_reported` | Contexto humanitario | Bajo |
@@ -484,16 +484,32 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **Licencia**: Dominio público (U.S. government)
 - **Documentación**: `https://earthquake.usgs.gov/fdsnws/event/1/`
 
-### 2.5 ADS-B Exchange
+### 2.5-MIL Military Flights (OpenSky Network)
 
-- **Endpoint base**: `https://adsbexchange.com/api/aircraft/v2/`
-- **Autenticación**: API key en header `api-auth`
-- **Frecuencia**: cada 60 segundos (posición actual)
-- **Filtros**: por bounding box o por `hex` (ICAO de aeronave)
-- **Campos clave**: `hex`, `flight`, `lat`, `lon`, `alt_baro`, `gs`, `track`,
-  `t` (timestamp Unix), `mil` (militar: true/false)
-- **Licencia**: Comercial — restricciones de redistribución
-- **Uso**: Detectar actividad aérea inusual cerca de AOIs activos
+- **Fuente primaria**: OpenSky Network — `https://opensky-network.org`
+- **Cuenta**: `https://opensky-network.org/my-opensky/account`
+- **Endpoint interno**: `GET /api/military/v1/list-military-flights`
+  — servicio relay propio que consume OpenSky y normaliza antes de exponer al frontend
+- **Parámetros**: `neLat`, `neLon`, `swLat`, `swLon`, `operator?`, `aircraftType?`
+- **Patrón**: Pull polling cada 60 seg por bbox de AOIs activos
+- **⚠️ No consultar sin bbox** — sin coordenadas devuelve respuesta vacía
+- **Filtro de militaridad** (ver `F-ING-MIL`):
+  - **Categoría 7** (`category == 7` en API de OpenSky) — captura todos los vuelos militares nativamente
+  - **Callsign** — 53 prefijos militares conocidos (FAF, GAF, AME, PLF, CFC, SVF, DAF, etc.)
+  - **Hex ICAO** — lista en `data/military_hex.txt` (85 entradas, ampliable sin redespliegue)
+  - Cualquiera de los tres criterios activa el filtro
+- **Frecuencia de datos OpenSky**: cada 5 segundos (estado)
+- **Cache**: por bbox + ventana temporal de 60 seg para reducir
+  presión sobre OpenSky
+- **Fallback**: si la fuente en vivo falla, servir última lectura válida
+  (stale) sin dejar la interfaz vacía
+- **Autenticación**: Basic Auth con `OPENSKY_CLIENT_ID` y `OPENSKY_CLIENT_SECRET`
+  (cuenta gratuita de OpenSky, limitada a 1 req/segundo)
+- **Licencia**: OpenSky Network Terms of Use — uso no comercial permitido
+- **Restricciones**: `hexCode` individual no se expone en API pública (ver `E-SEC`)
+- **`source_independence_class`**: `sensor` — factor confianza: ×2.0
+- **SLA latencia**: < 3 minutos (datos de OpenSky tienen lag ~5 seg)
+- **Renderizado frontend**: capas nativas Mapbox (symbol + circle), icono SDF ✈ generado en `onLoad`, doble halo (oscuro + blanco) para contraste, sin dependencia de DeckGL
 
 ### 2.6 MarineTraffic AIS API
 
@@ -526,6 +542,15 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **Frecuencia**: diaria / bajo demanda
 - **Licencia**: CC BY 3.0 IGO
 
+
+
+
+
+
+
+
+
+
 ---
 
 ## 3. SLAs de latencia objetivo
@@ -534,7 +559,7 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 |--------|--------------------------------------------------|
 | USGS | < 5 minutos |
 | GDELT | < 20 minutos |
-| ADS-B | < 3 minutos |
+| OpenSky (militar) | < 3 minutos |
 | FIRMS | < 3 horas |
 | MarineTraffic | < 10 minutos |
 | Liveuamap | < 20 minutos (si activo) |
@@ -561,6 +586,10 @@ FIRMS_MAP_KEY=
 # ADS-B Exchange
 ADSB_API_KEY=
 
+# OpenSky Network (vuelos militares)
+OPENSKY_CLIENT_ID=
+OPENSKY_CLIENT_SECRET=
+
 # MarineTraffic
 MARINETRAFFIC_API_KEY=
 
@@ -570,6 +599,10 @@ RELIEFWEB_APP_NAME=
 # Liveuamap (opcional, desactivable)
 LIVEUAMAP_ENABLED=false
 LIVEUAMAP_API_KEY=
+
+# Configuración del relay militar
+MILITARY_SOURCE=opensky
+MILITARY_RELAY_URL=http://localhost:8002
 ```
 
 Ninguna clave se hardcodea en código. Gestionadas via `.env` local

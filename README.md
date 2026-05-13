@@ -17,6 +17,8 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 | **Ingestor USGS** | Pull polling cada 3 min, manejo de rate limiting 429, filtro `minmagnitude=4.0` |
 | **Ingestor GDELT** | API GDELT Cloud v2 (gdeltcloud.com/api/v2), ventana 5 min (max 29 dias), Bearer auth, analisis de titulo para event_type, deduplicacion por `globalEventId` |
 | **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicacion por `event_id`, categorias ACLED -> internal mapping |
+| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares por categoría 7 + 53 prefijos callsign + lista hex ICAO. Rate limiting 1 req/s |
+| **API Vuelos Militares** | `GET /v1/military-flights` devuelve vuelos filtrados dentro de AOIs activos. Frontend: capas Mapbox nativas (symbol SDF ✈ + circle halo) |
 | **Normalizacion GDELT** | Mapper Events v2 a `EventCanonicalCreate`, CAMEO code -> category/event_type, deduplicacion por `globalEventId` |
 | **Normalizacion ACLED** | Mapper JSON a `EventCanonicalCreate`, clasificacion ACLED -> internal, deduplicacion por `event_id` |
 | **Normalizacion FIRMS** | Mapper CSV a `EventCanonicalCreate`, severidad por FRP (MW), deduplicacion SHA-256 |
@@ -29,6 +31,7 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 | **API AOI** | CRUD completo `/v1/aoi`, geometria real desde PostGIS, filtro espacial `ST_Intersects` en `/incidents` |
 | **API Corrections** | `POST /v1/corrections` con tipos `false_positive`, `close`, `reclassify`, `relocate`, `merge`; auditoria append-only |
 | **Confianza** | Calculo ponderado por clase de independencia de fuente con penalizacion por ventana de 6h para `media_derived` |
+| **Frontend** | Dashboard React con mapa Mapbox, capas 2D/3D, panel lateral con lista de incidentes virtualizada, filtros, estado polling con TanStack Query |
 
 ### Pendiente / Gaps conocidos
 
@@ -47,9 +50,15 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 ## Requisitos previos
 
 - **Python 3.12+** (gestionado con `uv`)
+- **Node.js 18+** (para el frontend)
 - **Docker** y **Docker Compose**
 - **uv** -- gestor de entorno: `pip install uv`
-- API key de NASA FIRMS: https://firms.modaps.eosdis.nasa.gov/api/map_key/
+- Cuentas de API para las fuentes de datos:
+  - **GDELT Cloud Events v2**: https://gdeltcloud.com/dashboard
+  - **ACLED**: https://acleddata.com/myacled
+  - **FIRMS (NASA Fire Information)**: https://firms.modaps.eosdis.nasa.gov/api/map_key/
+  - **OpenSky Network** (vuelos militares): https://opensky-network.org/my-opensky/account
+  - **Mapbox** (token para el frontend): https://console.mapbox.com/
 
 ---
 
@@ -66,10 +75,18 @@ Espera a que el healthcheck pase (`pg_isready`). La BD queda disponible en `loca
 ### 2. Entorno Python
 
 ```bash
+cd backend
 uv sync
 ```
 
-### 3. Variables de entorno
+### 3. Entorno Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+### 4. Variables de entorno
 
 Crea un archivo `.env` en la raiz del proyecto (nunca commitear):
 
@@ -77,39 +94,58 @@ Crea un archivo `.env` en la raiz del proyecto (nunca commitear):
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/geosentinel
 FIRMS_MAP_KEY=tu_api_key_aqui
 GDELT_API_KEY=tu_gdelt_api_key
-ACLED_API_KEY=tu_acled_api_key
+ACLED_ACCESS_TOKEN=tu_acled_access_token
 ACLED_EMAIL=tu_email_registrado_en_acled
+OPENSKY_CLIENT_ID=tu_opensky_client_id
+OPENSKY_CLIENT_SECRET=tu_opensky_client_secret
+MILITARY_SOURCE=opensky
+MILITARY_RELAY_URL=http://localhost:8002
+VITE_MAPBOX_TOKEN=tu_mapbox_token
 ```
 
-Carga el `.env` antes de ejecutar cualquier comando:
+> Los scripts de ingesta cargan automaticamente el `.env` desde la raiz del proyecto.
+
+### 5. Migraciones de base de datos
 
 ```bash
-# Linux / macOS
-export $(cat .env | xargs)
-```
-
-```powershell
-# Windows PowerShell
-Get-Content .env | ForEach-Object { $k,$v = $_ -split '=',2; [System.Environment]::SetEnvironmentVariable($k,$v) }
-```
-
-### 4. Migraciones de base de datos
-
-```bash
+cd backend
 uv run alembic upgrade head
 ```
 
 Esto crea todas las tablas en la BD.
 
-### 5. Arrancar la API
+### 6. Arrancar la API y el Frontend
 
 ```bash
-uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+# Terminal 1: API
+cd backend
+uv run uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
 ```
 
 La API queda disponible en `http://localhost:8000`.
 Documentacion interactiva (Swagger UI): `http://localhost:8000/docs`
 Schema OpenAPI (ReDoc): `http://localhost:8000/redoc`
+El frontend queda disponible en `http://localhost:5173`.
+
+### 6b. Relay de vuelos militares (opcional)
+
+Para usar la funcionalidad de vuelos militares (requiere AOIs activos):
+
+```bash
+# Terminal 3: Relay militar (OpenSky)
+cd C:\Proyextos\GeoSentinel
+$env:PYTHONPATH = "C:\Proyextos\GeoSentinel"
+$env:MILITARY_SOURCE = "opensky"
+$env:OPENSKY_CLIENT_ID = "tu_client_id"
+$env:OPENSKY_CLIENT_SECRET = "tu_client_secret"
+python -m services.military_relay.main
+```
+
+El relay escuchara en `http://localhost:8002` (o la URL configurada en `MILITARY_RELAY_URL`).
 
 ---
 
@@ -234,92 +270,42 @@ curl -X POST http://localhost:8000/v1/corrections \
 
 ## Obtencion de datos reales
 
+Todos los scripts de ingesta buscan el `.env` automaticamente. Ejecuta desde la raiz del proyecto:
+
 ### Ingestor USGS (terremotos >= 4.0)
 
 Descarga y procesa eventos de las ultimas 24 horas:
 
 ```bash
-uv run python -c "
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from ingestors.usgs_ingestor import USGSIngestor
-
-engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
-Session = sessionmaker(bind=engine)
-
-with Session() as session:
-    ingestor = USGSIngestor()
-    result = ingestor.poll(session)
-    print(result)
-"
+cd backend
+uv run python backend/scripts/run_usgs.py
 ```
 
 ### Ingestor FIRMS (incendios activos)
 
-Requiere `FIRMS_MAP_KEY` configurado. Procesa hotspots del ultimo dia para un bbox:
+Requiere `FIRMS_MAP_KEY` configurado. Procesa hotspots del ultimo dia para los AOIs activos:
 
 ```bash
-uv run python -c "
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from ingestors.firms_ingestor import FIRMSIngestor
-
-engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
-Session = sessionmaker(bind=engine)
-
-with Session() as session:
-    ingestor = FIRMSIngestor()
-    result = ingestor.poll(session, bbox=(-10.0, 35.0, 5.0, 45.0), days=1)
-    print(result)
-"
+cd backend
+uv run python backend/scripts/run_firms.py
 ```
 
-### Ingestor GDELT (conflictos, cada 5 min)
+### Ingestor GDELT (conflictos, todas las zonas)
 
-Requiere `GDELT_API_KEY`. Descarga eventos de conflicto de los ultimos 5 minutos:
+Requiere `GDELT_API_KEY`. Descarga eventos de conflicto de las ultimas 24h por zona:
 
 ```bash
-uv run python -c "
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from ingestors.gdelt_ingestor import GDELTIngestor
-
-engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
-Session = sessionmaker(bind=engine)
-
-with Session() as session:
-    ingestor = GDELTIngestor()
-    result = ingestor.run(session)
-    print(result)
-"
+cd backend
+uv run python backend/scripts/run_gdelt.py
 ```
 
-### Ingestor ACLED (conflictos estructurados, batch diario)
+### Ingestor ACLED (conflictos estructurados, batch 48h)
 
-Requiere `ACLED_API_KEY` y `ACLED_EMAIL`. Descarga las ultimas 48h (incluye actualizaciones retroactivas).
-Para backfill de una fecha concreta usar `since_date`:
+Requiere `ACLED_ACCESS_TOKEN` y `ACLED_EMAIL`. Descarga las ultimas 48h:
 
 ```bash
-uv run python -c "
-import os
-from datetime import datetime, timezone
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from ingestors.acled_ingestor import ACLEDIngestor
-
-engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
-Session = sessionmaker(bind=engine)
-
-with Session() as session:
-    ingestor = ACLEDIngestor()
-    # Backfill desde una fecha especifica
-    since = datetime(2025, 1, 1, tzinfo=timezone.utc)
-    result = ingestor.run(session, since_date=since)
-    print(result)
-"
+cd backend
+uv run python backend/scripts/run_acled.py
 ```
 
 ### Job de clustering
@@ -327,21 +313,8 @@ with Session() as session:
 Agrupa los eventos en incidentes tras la ingesta:
 
 ```bash
-uv run python -c "
-import os
-from datetime import datetime, timezone, timedelta
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from jobs.clustering_job import run_clustering_job
-
-engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
-Session = sessionmaker(bind=engine)
-
-with Session() as session:
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
-    result = run_clustering_job(session, last_run_time=since)
-    print(result)
-"
+cd backend
+uv run python backend/scripts/run_clustering.py
 ```
 
 ### Job de ciclo de vida
@@ -349,13 +322,13 @@ with Session() as session:
 Marca incidentes como `stale` y resetea `updated -> open`:
 
 ```bash
+cd backend
 uv run python -c "
-import os
+from backend.jobs.incident_lifecycle import run_lifecycle_job, mark_stale_incidents
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from jobs.incident_lifecycle import run_lifecycle_job, mark_stale_incidents
 
-engine = create_engine(os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geosentinel'))
+engine = create_engine('postgresql://postgres:postgres@localhost:5432/geosentinel')
 Session = sessionmaker(bind=engine)
 
 with Session() as session:
@@ -369,18 +342,22 @@ with Session() as session:
 
 ## Tests
 
+Los tests viven en `tests/` en la raiz del proyecto. Se ejecutan desde `backend/`:
+
 ```bash
+cd backend
+
 # Ejecutar todos los tests
 uv run pytest
 
 # Con reporte de cobertura
-uv run pytest --cov=. --cov-report=term-missing
+uv run pytest --cov=backend --cov-report=term-missing
 
 # Solo normalizacion
-uv run pytest tests/normalizers/
+uv run pytest ../tests/normalizers/
 
 # Solo clustering
-uv run pytest tests/jobs/
+uv run pytest ../tests/jobs/
 ```
 
 ---
@@ -389,37 +366,63 @@ uv run pytest tests/jobs/
 
 ```
 geosentinel/
-├── api/
-│   ├── main.py              # FastAPI app, routers, CORS
-│   ├── database.py          # Conexion SQLAlchemy (DATABASE_URL)
-│   ├── routes/
-│   │   ├── incidents.py     # GET /v1/incidents, GET /v1/incidents/{id}
-│   │   ├── aoi.py           # CRUD /v1/aoi + /v1/aoi/{id}/incidents
-│   │   ├── corrections.py   # POST /v1/corrections
-│   │   ├── health.py        # GET /v1/health
-│   │   └── seed.py          # GET /v1/seed (datos de prueba)
-│   └── schemas/             # Modelos Pydantic de respuesta API
-├── ingestors/
-│   ├── firms_ingestor.py    # Pull FIRMS NASA (CSV, retry/backoff, tipo 0/1)
-│   ├── usgs_ingestor.py     # Pull USGS GeoJSON (retry/backoff, mag>=4.0)
-│   ├── gdelt_ingestor.py    # Pull GDELT Cloud v2 (gdeltcloud.com, Bearer)
-│   └── acled_ingestor.py    # Pull ACLED (OAuth2 Bearer, backfill 48h)
-├── normalizers/
-│   ├── firms_mapper.py      # FIRMS row -> EventCanonicalCreate
-│   ├── usgs_mapper.py       # USGS feature -> EventCanonicalCreate
-│   ├── gdelt_mapper.py      # GDELT Events v2 -> EventCanonicalCreate
-│   └── acled_mapper.py      # ACLED JSON -> EventCanonicalCreate
-├── jobs/
-│   ├── clustering_job.py    # DBSCAN espacio-temporal + metricas
-│   ├── event_processing.py  # Upsert en events_canonical
-│   └── incident_lifecycle.py# Maquina de estados + corrections_audit
-├── models/                  # ORM SQLAlchemy (tablas BD)
-├── schemas/                 # Pydantic internos (EventCanonicalCreate, etc.)
-├── scripts/                 # Scripts utilitarios (run_*, query_db, check_db)
-├── validation/
-│   └── validator.py         # 6 reglas de validacion + quarantine
-├── alembic/                 # Migraciones de BD (herramienta: alembic)
-├── tests/                   # Tests pytest
+├── backend/
+│   ├── api/
+│   │   ├── main.py              # FastAPI app, routers, CORS
+│   │   ├── database.py          # Conexion SQLAlchemy (DATABASE_URL)
+│   │   ├── routes/
+│   │   │   ├── incidents.py     # GET /v1/incidents, GET /v1/incidents/{id}
+│   │   │   ├── aoi.py           # CRUD /v1/aoi + /v1/aoi/{id}/incidents
+│   │   │   ├── corrections.py   # POST /v1/corrections
+│   │   │   ├── health.py        # GET /v1/health
+│   │   │   ├── seed.py          # GET /v1/seed (datos de prueba)
+│   │   │   └── military.py      # GET /v1/military-flights
+│   │   └── schemas/             # Modelos Pydantic de respuesta API
+│   ├── ingestors/
+│   │   ├── firms_ingestor.py    # Pull FIRMS NASA (CSV, retry/backoff, tipo 0/1)
+│   │   ├── usgs_ingestor.py     # Pull USGS GeoJSON (retry/backoff, mag>=4.0)
+│   │   ├── gdelt_ingestor.py    # Pull GDELT Cloud v2 (gdeltcloud.com, Bearer)
+│   │   ├── acled_ingestor.py    # Pull ACLED (OAuth2 Bearer, backfill 48h)
+│   │   └── military_ingestor.py # Pull desde relay militar (OpenSky via relay)
+│   ├── normalizers/
+│   │   ├── firms_mapper.py      # FIRMS row -> EventCanonicalCreate
+│   │   ├── usgs_mapper.py       # USGS feature -> EventCanonicalCreate
+│   │   ├── gdelt_mapper.py      # GDELT Events v2 -> EventCanonicalCreate
+│   │   └── acled_mapper.py      # ACLED JSON -> EventCanonicalCreate
+├── services/
+│   └── military_relay/          # Relay FastAPI para flights militares (OpenSky)
+│       └── main.py              # Servidor en puerto 8002
+│   ├── jobs/
+│   │   ├── clustering_job.py    # DBSCAN espacio-temporal + metricas
+│   │   ├── event_processing.py  # Upsert en events_canonical
+│   │   └── incident_lifecycle.py# Maquina de estados + corrections_audit
+│   ├── models/                  # ORM SQLAlchemy (tablas BD)
+│   ├── schemas/                 # Pydantic internos (EventCanonicalCreate, etc.)
+│   ├── scripts/                 # Scripts utilitarios (run_*, query_db, check_db)
+│   ├── validation/
+│   │   └── validator.py         # 6 reglas de validacion + quarantine
+│   ├── alembic/                 # Migraciones de BD (herramienta: alembic)
+│   └── pyproject.toml           # Dependencias gestionadas con uv
+├── tests/                   # Tests pytest (en raiz del proyecto)
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── map/
+│   │   │   │   └── IncidentMap.tsx    # Mapa Mapbox con capas de incidentes
+│   │   │   └── panels/
+│   │   │       ├── IncidentList.tsx   # Lista virtualizada de incidentes
+│   │   │       └── IncidentDetail.tsx # Detalle del incidente seleccionado
+│   │   ├── pages/
+│   │   │   └── Dashboard.tsx           # Layout principal con mapa y panel lateral
+│   │   ├── stores/
+│   │   │   ├── mapStore.ts            # Estado del mapa (capas, viewport)
+│   │   │   └── filterStore.ts         # Filtros de incidentes
+│   │   ├── types/
+│   │   │   └── incident.ts            # Tipos TypeScript
+│   │   └── api/
+│   │       └── incidents.ts           # Llamadas a la API backend
+│   ├── public/
+│   └── package.json
 ├── specs_estructurales/     # E-ARCH, E-MODEL, E-SEC, E-STD, E-MON...
 ├── specs_funcionales/       # F-ING-*, F-NORM-*, F-CLUST, F-LC, F-API-*
 ├── docker-compose.yml       # PostgreSQL 16 + PostGIS 3.4
@@ -434,7 +437,8 @@ geosentinel/
 |--------|----------|-------------|
 | FIRMS NASA | NASA libre | Atribucion requerida |
 | USGS | Dominio publico | Ninguna |
-| GDELT | Dominio publico | Ninguna |
+| GDELT | Dominio público | Ninguna |
 | ACLED | CC BY-NC 4.0 | Solo uso no comercial |
-| ADS-B Exchange | Comercial | No redistribuir raw |
+| OpenSky Network | Terms of Use | Uso no comercial permitido |
 | MarineTraffic | Comercial | No redistribuir raw |
+| Mapbox GL JS | Comercial | Requiere token valido - respetar limites del plan |
