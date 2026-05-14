@@ -1,6 +1,7 @@
 import { useMapStore, useFilterStore } from '../../stores/mapStore'
 import type { Incident } from '../../types/incident'
-import { CATEGORY_COLORS, STATUS_COLORS } from '../../types/incident'
+import { STATUS_COLORS } from '../../types/incident'
+import { getIncidentColor, getHeadline } from '../../utils/colors'
 import { formatDistanceToNow } from 'date-fns'
 
 interface IncidentListProps {
@@ -11,18 +12,11 @@ interface IncidentListProps {
 }
 
 export function IncidentList({ incidents, total, page, isLoading }: IncidentListProps) {
-  const { setSelectedIncident, setViewport, selectedIncident } = useMapStore()
+  const { setSelectedIncident, selectedIncident } = useMapStore()
   const { filters, setFilters } = useFilterStore()
 
   const handleSelect = (incident: Incident) => {
     setSelectedIncident(incident)
-    if (incident.canonical_point) {
-      setViewport({
-        longitude: incident.canonical_point.lon,
-        latitude: incident.canonical_point.lat,
-        zoom: 6,
-      })
-    }
   }
 
   return (
@@ -35,10 +29,12 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
         >
           <option value="">Todas</option>
           <option value="conflict">Conflicto</option>
-          <option value="disaster_natural">Desastre natural</option>
           <option value="wildfire">Incendio</option>
-          <option value="crime">Crimen</option>
-          <option value="protest">Protesta</option>
+          <option value="disaster_natural">Desastre natural</option>
+          <option value="mobility">Movilidad</option>
+          <option value="humanitarian">Humanitario</option>
+          <option value="thermal_anomaly">Anomalia termica</option>
+          <option value="other">Otros</option>
         </select>
         <select
           value={filters.status || ''}
@@ -62,7 +58,9 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
         ) : (
           incidents.map((incident) => {
             const isSelected = selectedIncident?.incident_id === incident.incident_id
-            const color = CATEGORY_COLORS[incident.category] || CATEGORY_COLORS.default
+            const color = getIncidentColor(incident.event_type, incident.category)
+            const headline = getHeadline(incident)
+
             return (
               <div
                 key={incident.incident_id}
@@ -73,20 +71,29 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span
-                    className="w-2 h-2 rounded-full"
+                    className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: `rgb(${color.join(',')})` }}
                   />
-                  <span className="font-mono text-sm text-text-primary">
-                    {incident.event_type.toUpperCase()}
+                  <span className="text-sm text-text-primary font-medium leading-tight line-clamp-2">
+                    {headline}
                   </span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${STATUS_COLORS[incident.status]}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${STATUS_COLORS[incident.status]}`}>
                     {incident.status}
                   </span>
                 </div>
-                <div className="text-xs text-text-secondary font-mono">
-                  SEV {incident.severity_max.toFixed(1)} · {incident.sources.join(', ')}
+                <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex-1 h-1.5 bg-bg-base rounded overflow-hidden">
+                    <div
+                      className="h-full bg-accent-blue"
+                      style={{ width: `${(incident.severity_max / 10) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-text-secondary font-mono shrink-0">SEV {incident.severity_max.toFixed(1)}</span>
                 </div>
                 <div className="text-xs text-text-secondary mt-1">
+                  {incident.sources.join(' · ')}
+                </div>
+                <div className="text-xs text-text-secondary mt-0.5">
                   {formatDistanceToNow(new Date(incident.last_seen), { addSuffix: true })}
                 </div>
               </div>

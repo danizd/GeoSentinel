@@ -1,11 +1,14 @@
-import { useMemo, useState, useCallback } from 'react'
-import Map, { NavigationControl, Source, Layer } from 'react-map-gl'
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import Map, { NavigationControl, Source, Layer, type MapRef } from 'react-map-gl'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useMapStore } from '../../stores/mapStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMilitaryFlights, type MilitaryFlight } from '../../api/military'
 import { fetchAois } from '../../api/aois'
 import { fetchAISVessels, type AISVessel } from '../../api/ais'
 import type { Incident } from '../../types/incident'
+import { getCategoryHex, getHeadline, getIncidentColor } from '../../utils/colors'
+import { US_MILITARY_BASES, type UsMilitaryBase } from '../../data/us_bases'
 
 function getMilitaryColor(country?: string | null): string {
   const mapping: Record<string, string> = {
@@ -235,11 +238,159 @@ function MilitaryTrailsLayer({ flights }: { flights: MilitaryFlight[] }) {
   )
 }
 
+const basesGeojson: GeoJSON.FeatureCollection = {
+  type: 'FeatureCollection',
+  features: US_MILITARY_BASES.map((b, i) => ({
+    type: 'Feature' as const,
+    properties: {
+      id: i,
+      name: b.name,
+      country: b.country,
+      notes: b.notes,
+    },
+    geometry: {
+      type: 'Point' as const,
+      coordinates: [b.lon, b.lat],
+    },
+  })),
+}
+
+function BaseTooltip({ base, x, y }: { base: UsMilitaryBase | null; x: number; y: number }) {
+  if (!base) return null
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.15 }}
+      className="panel-glass absolute z-50 p-3 font-mono text-xs pointer-events-none shadow-xl"
+      style={{ left: x + 16, top: y - 10, maxWidth: 340 }}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-3 h-3 rounded-full bg-accent-amber shrink-0" />
+        <span className="text-text-primary font-bold text-sm">{base.name}</span>
+      </div>
+      <div className="text-text-secondary">{base.country}</div>
+      {base.notes && (
+        <div className="text-text-secondary mt-1 leading-tight">{base.notes}</div>
+      )}
+    </motion.div>
+  )
+}
+
+function IncidentTooltip({ hover, incidents }: { hover: { x: number; y: number; incidentId: string } | null; incidents: Incident[] }) {
+  if (!hover) return null
+  const incident = incidents.find(i => i.incident_id === hover.incidentId)
+  if (!incident) return null
+
+  const color = getIncidentColor(incident.event_type, incident.category)
+  const headline = getHeadline(incident)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.15 }}
+      className="panel-glass absolute z-50 p-3 font-mono text-xs pointer-events-none shadow-xl"
+      style={{
+        left: hover.x + 16,
+        top: hover.y - 10,
+        maxWidth: 280,
+      }}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: `rgb(${color.join(',')})` }} />
+        <span className="text-text-primary font-bold text-xs leading-tight">{headline}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-text-secondary">
+        <div>Categoría: {incident.category}</div>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-text-secondary">
+        <div>Severidad: {incident.severity_max.toFixed(1)}</div>
+      </div>         
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-text-secondary">        
+        <div>Confianza: {incident.confidence.toFixed(1)}</div>
+      </div>
+      <div className="text-text-secondary mt-0.5">
+        Fuente: {incident.sources.join(' · ')}
+      </div>
+    </motion.div>
+  )
+}
+
+function PulseOverlay({ incidents, mapRef }: { incidents: Incident[]; mapRef: React.RefObject<MapRef | null> }) {
+  const [pixelPositions, setPixelPositions] = useState<Array<{ id: string; x: number; y: number; color: string }>>([])
+
+  const activeIncidents = useMemo(
+    () => incidents.filter(i => i.canonical_point && (i.status === 'open' || i.status === 'updated')),
+    [incidents]
+  )
+
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map || !activeIncidents.length) {
+      setPixelPositions([])
+      return
+    }
+
+    const update = () => {
+      const positions: Array<{ id: string; x: number; y: number; color: string }> = []
+      for (const inc of activeIncidents) {
+        if (!inc.canonical_point) continue
+        const px = map.project([inc.canonical_point.lon, inc.canonical_point.lat])
+        if (px.x < 0 || px.y < 0 || px.x > window.innerWidth || px.y > window.innerHeight) continue
+        positions.push({
+          id: inc.incident_id,
+          x: px.x,
+          y: px.y,
+          color: getCategoryHex(inc.category),
+        })
+      }
+      setPixelPositions(positions.slice(0, 30))
+    }
+
+    update()
+    map.on('move', update)
+    map.on('moveend', update)
+    return () => {
+      map.off('move', update)
+      map.off('moveend', update)
+    }
+  }, [activeIncidents, mapRef])
+
+  return (
+    <AnimatePresence>
+      {pixelPositions.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 0, scale: 2.5 }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut', repeatDelay: 0 }}
+          className="absolute pointer-events-none rounded-full"
+          style={{
+            left: p.x - 12,
+            top: p.y - 12,
+            width: 24,
+            height: 24,
+            border: `2px solid ${p.color}`,
+            backgroundColor: 'transparent',
+          }}
+        />
+      ))}
+    </AnimatePresence>
+  )
+}
+
 export function IncidentMap({ incidents }: IncidentMapProps) {
+  const mapRef = useRef<MapRef | null>(null)
   const { viewport, layers, selectedIncident } = useMapStore()
   const [is3D, setIs3D] = useState(true)
   const [selectedFlight, setSelectedFlight] = useState<MilitaryFlight | null>(null)
   const [selectedVessel, setSelectedVessel] = useState<AISVessel | null>(null)
+  const [hover, setHover] = useState<{ x: number; y: number; incidentId: string } | null>(null)
+  const [hoveredBase, setHoveredBase] = useState<{ base: UsMilitaryBase; x: number; y: number } | null>(null)
+  const prevSelectedRef = useRef<string | null>(null)
 
   const { data: militaryData, isLoading: militaryLoading } = useQuery({
     queryKey: ['military-flights'],
@@ -272,13 +423,21 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     )
   }, [aisData])
 
+  const NATO_COUNTRIES = new Set([
+    'Albania', 'Belgium', 'Bulgaria', 'Canada', 'Croatia', 'Czech Republic',
+    'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary',
+    'Iceland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Montenegro',
+    'Netherlands', 'North Macedonia', 'Norway', 'Poland', 'Portugal', 'Romania',
+    'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Turkey', 'United Kingdom', 'United States',
+  ])
+
   const aoiGeojson = useMemo(() => {
     if (!aoiData?.aois?.length) return null
     return {
       type: 'FeatureCollection' as const,
       features: aoiData.aois.map(a => ({
         type: 'Feature' as const,
-        properties: { id: a.aoi_id, name: a.name },
+        properties: { id: a.aoi_id, name: a.name, isNato: NATO_COUNTRIES.has(a.name) },
         geometry: a.geometry,
       })),
     }
@@ -306,6 +465,9 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
           category: incident.category,
           severity: incident.severity_max,
           status: incident.status,
+          title: incident.raw_payload?.title || incident.event_type,
+          confidence: incident.confidence,
+          sources: incident.sources.join(','),
         },
         geometry: {
           type: 'Point' as const,
@@ -324,6 +486,28 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       bearing: vp.bearing ?? 0,
     }
   }, [viewport])
+
+  useEffect(() => {
+    if (!selectedIncident?.canonical_point) return
+    if (prevSelectedRef.current === selectedIncident.incident_id) return
+    prevSelectedRef.current = selectedIncident.incident_id
+
+    const map = mapRef.current?.getMap()
+    if (map) {
+      map.flyTo({
+        center: [selectedIncident.canonical_point.lon, selectedIncident.canonical_point.lat],
+        zoom: 6,
+        duration: 1800,
+        essential: true,
+      })
+    }
+  }, [selectedIncident])
+
+  useEffect(() => {
+    if (!selectedIncident) {
+      prevSelectedRef.current = null
+    }
+  }, [selectedIncident])
 
   const handleMapLoad = useCallback((e: any) => {
     const map = e.target
@@ -362,6 +546,60 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       }
     }
     shipImg.src = shipCanvas.toDataURL()
+
+    const shieldCanvas = document.createElement('canvas')
+    shieldCanvas.width = 48
+    shieldCanvas.height = 48
+    const shctx = shieldCanvas.getContext('2d')!
+    shctx.font = 'bold 30px serif'
+    shctx.textAlign = 'center'
+    shctx.textBaseline = 'middle'
+    shctx.fillStyle = '#FBBF24'
+    shctx.fillText('\u26E8', 24, 24)
+    const shieldImg = new Image()
+    shieldImg.onload = () => {
+      if (!map.hasImage('shield-icon')) {
+        map.addImage('shield-icon', shieldImg, { sdf: true })
+      }
+    }
+    shieldImg.src = shieldCanvas.toDataURL()
+  }, [])
+
+  const handleMouseMove = useCallback((e: any) => {
+    const map = mapRef.current?.getMap()
+    if (!map) return
+
+    const features = map.queryRenderedFeatures(e.point, {
+      layers: ['incidents-point'],
+    })
+
+    if (features.length > 0) {
+      const f = features[0]
+      setHover({ x: e.point.x, y: e.point.y, incidentId: f.properties?.id })
+      setHoveredBase(null)
+    } else {
+      setHover(null)
+    }
+
+    if (!features.length && layers.bases) {
+      const baseFeatures = map.queryRenderedFeatures(e.point, {
+        layers: ['bases-circle'],
+      })
+      if (baseFeatures.length > 0) {
+        const bf = baseFeatures[0]
+        const idx = bf.properties?.id
+        if (typeof idx === 'number' && US_MILITARY_BASES[idx]) {
+          setHoveredBase({ base: US_MILITARY_BASES[idx], x: e.point.x, y: e.point.y })
+        }
+      } else {
+        setHoveredBase(null)
+      }
+    }
+  }, [layers.bases])
+
+  const handleMouseLeave = useCallback(() => {
+    setHover(null)
+    setHoveredBase(null)
   }, [])
 
   const handleMapClick = (e: any) => {
@@ -388,13 +626,31 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     setSelectedVessel(null)
   }
 
+  const INCIDENT_CATEGORY_COLORS = [
+    'match', ['get', 'category'],
+    'conflict', '#ef4444',
+    'wildfire', '#f97316',
+    'earthquake', '#a855f7',
+    'disaster_natural', '#06b6d4',
+    'mobility', '#38bdf8',
+    'humanitarian', '#fbbf24',
+    'thermal_anomaly', '#ea580c',
+    'crime', '#a855f7',
+    'protest', '#ec4899',
+    'other', '#64748b',
+    '#38bdf8',
+  ]
+
   return (
     <div className="relative w-full h-full">
       <Map
+        ref={mapRef}
         initialViewState={displayViewport}
         onLoad={handleMapLoad}
         onClick={handleMapClick}
-        interactiveLayerIds={['military-flights-symbol', 'ais-vessels-symbol']}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        interactiveLayerIds={['military-flights-symbol', 'ais-vessels-symbol', 'incidents-point']}
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' } as any}
         mapStyle={is3D ? MAP_STYLE_3D : MAP_STYLE_2D}
         mapboxAccessToken={MAPBOX_TOKEN}
@@ -408,13 +664,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
               type="circle"
               paint={{
                 'circle-radius': ['interpolate', ['linear'], ['get', 'severity'], 0, 4, 10, 20],
-                'circle-color': [
-                  'match', ['get', 'category'],
-                  'conflict', '#ef4444',
-                  'disaster_natural', '#fbbf24',
-                  'wildfire', '#f97316',
-                  '#38bdf8'
-                ],
+                'circle-color': INCIDENT_CATEGORY_COLORS as any,
                 'circle-opacity': 0.85,
                 'circle-stroke-width': 1,
                 'circle-stroke-color': '#ffffff',
@@ -478,9 +728,9 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
               type="line"
               source="aoi-zones"
               paint={{
-                'line-color': '#3B82F6',
-                'line-width': 2,
-                'line-opacity': 0.7,
+                'line-color': ['case', ['get', 'isNato'], '#000000', '#3B82F6'],
+                'line-width': ['case', ['get', 'isNato'], 1.5, 2],
+                'line-opacity': ['case', ['get', 'isNato'], 0.85, 0.7],
                 'line-dasharray': [3, 2],
               }}
             />
@@ -498,8 +748,31 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
           <VesselsIconManager vessels={vessels} />
         )}
 
+        {layers.bases && (
+          <Source id="bases-src" type="geojson" data={basesGeojson}>
+            <Layer
+              id="bases-circle"
+              type="circle"
+              source="bases-src"
+              paint={{
+                'circle-radius': 6,
+                'circle-color': '#FBBF24',
+                'circle-opacity': 0.85,
+                'circle-stroke-width': 1.5,
+                'circle-stroke-color': '#000000',
+              }}
+            />
+          </Source>
+        )}
+
         <NavigationControl position="top-right" />
       </Map>
+
+      <IncidentTooltip hover={hover} incidents={incidents} />
+
+      {hoveredBase && <BaseTooltip base={hoveredBase.base} x={hoveredBase.x} y={hoveredBase.y} />}
+
+      <PulseOverlay incidents={incidents} mapRef={mapRef} />
 
       {selectedFlight && (
         <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-56 z-50 max-h-[70vh] overflow-y-auto">
@@ -602,8 +875,10 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-60 z-50 max-h-[70vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-accent-blue" />
-              <span className="text-accent-blue font-bold text-sm">{selectedIncident.event_type.toUpperCase()}</span>
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: `rgb(${getIncidentColor(selectedIncident.event_type, selectedIncident.category).join(',')})` }} />
+              <span className="text-accent-blue font-bold text-sm">
+                {getHeadline(selectedIncident)}
+              </span>
             </div>
             <button onClick={() => useMapStore.getState().setSelectedIncident(null)} className="text-text-secondary hover:text-white text-lg leading-none">&times;</button>
           </div>
@@ -612,12 +887,6 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
             <div className="flex justify-between"><span className="text-text-primary">Status</span> <span className={`px-1 rounded text-[10px] ${selectedIncident.status === 'open' ? 'bg-accent-green' : selectedIncident.status === 'updated' ? 'bg-accent-blue' : 'bg-accent-amber'}`}>{selectedIncident.status}</span></div>
             <div className="flex justify-between"><span className="text-text-primary">Severidad</span> <span>{selectedIncident.severity_max.toFixed(1)}</span></div>
             <div className="flex justify-between"><span className="text-text-primary">Confianza</span> <span>{selectedIncident.confidence.toFixed(1)}</span></div>
-            {selectedIncident.raw_payload?.title && (
-              <div className="border-t border-border-glow pt-1 mt-1">
-                <div className="text-text-primary text-[10px] mb-0.5">TITULO</div>
-                <div className="text-text-primary text-[10px] leading-tight">{selectedIncident.raw_payload.title}</div>
-              </div>
-            )}
             {selectedIncident.actors && selectedIncident.actors.length > 0 && (
               <div className="border-t border-border-glow pt-1 mt-1">
                 <div className="text-text-primary text-[10px] mb-0.5">ACTORES</div>

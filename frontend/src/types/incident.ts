@@ -51,10 +51,12 @@ export interface IncidentFilters {
 
 export const CATEGORY_COLORS: Record<string, [number, number, number]> = {
   conflict: [239, 68, 68],
-  disaster_natural: [251, 191, 36],
   wildfire: [249, 115, 22],
-  crime: [168, 85, 247],
-  protest: [236, 72, 153],
+  disaster_natural: [6, 182, 212],
+  mobility: [56, 189, 248],
+  humanitarian: [251, 191, 36],
+  thermal_anomaly: [234, 88, 12],
+  other: [0, 255, 65],
   default: [56, 189, 248],
 }
 

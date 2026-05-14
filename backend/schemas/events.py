@@ -11,6 +11,7 @@ class CategoryEnum(str, Enum):
     WILDFIRE = "wildfire"
     MOBILITY = "mobility"
     HUMANITARIAN = "humanitarian"
+    THERMAL_ANOMALY = "thermal_anomaly"
     OTHER = "other"
 
 

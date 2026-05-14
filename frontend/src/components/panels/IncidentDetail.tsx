@@ -1,7 +1,8 @@
 import { X } from 'lucide-react'
 import { useMapStore } from '../../stores/mapStore'
 import type { Incident } from '../../types/incident'
-import { CATEGORY_COLORS, STATUS_COLORS } from '../../types/incident'
+import { STATUS_COLORS } from '../../types/incident'
+import { getIncidentColor, getHeadline } from '../../utils/colors'
 import { formatDistanceToNow } from 'date-fns'
 
 interface IncidentDetailProps {
@@ -10,7 +11,8 @@ interface IncidentDetailProps {
 
 export function IncidentDetail({ incident }: IncidentDetailProps) {
   const { setSelectedIncident } = useMapStore()
-  const color = CATEGORY_COLORS[incident.category] || CATEGORY_COLORS.default
+  const color = getIncidentColor(incident.event_type, incident.category)
+  const headline = getHeadline(incident)
 
   return (
     <div className="bg-bg-panel border-l border-border-glow h-full flex flex-col">
@@ -32,11 +34,11 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
 
         <div className="flex items-center gap-3">
           <span
-            className="w-3 h-3 rounded-full"
+            className="w-3 h-3 rounded-full shrink-0"
             style={{ backgroundColor: `rgb(${color.join(',')})` }}
           />
-          <span className="text-lg font-bold text-text-primary">{incident.event_type.toUpperCase()}</span>
-          <span className={`text-xs px-2 py-1 rounded ${STATUS_COLORS[incident.status]}`}>
+          <span className="text-lg font-bold text-text-primary leading-tight">{headline}</span>
+          <span className={`text-xs px-2 py-1 rounded shrink-0 ${STATUS_COLORS[incident.status]}`}>
             {incident.status}
           </span>
         </div>

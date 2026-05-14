@@ -18,6 +18,7 @@ interface MapState {
     aoi: boolean
     tracks: boolean
     vessels: boolean
+    bases: boolean
   }
   toggleLayer: (layer: keyof MapState['layers']) => void
 }
@@ -42,6 +43,7 @@ export const useMapStore = create<MapState>((set) => ({
     aoi: true,
     tracks: false,
     vessels: false,
+    bases: false,
   },
   toggleLayer: (layer) =>
     set((state) => ({

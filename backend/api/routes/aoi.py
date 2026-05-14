@@ -79,7 +79,7 @@ def create_aoi(data: AoiCreate, db: Session = Depends(get_db)) -> AoiResponse:
 @router.get("/aoi", response_model=AoiListResponse)
 def list_aois(
     page: int = Query(1, ge=1),
-    limit: int = Query(20, le=100),
+    limit: int = Query(50, le=100),
     db: Session = Depends(get_db),
 ) -> AoiListResponse:
     query = select(Aoi).where(Aoi.is_active == True)

@@ -16,7 +16,7 @@ export default {
         'accent-red': '#ef4444',
         'accent-green': '#22c55e',
         'text-primary': '#e2e8f0',
-        'text-secondary': '#64748b',
+        'text-secondary': '#00ff41',
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'monospace'],

@@ -38,7 +38,7 @@ class EventsCanonical(Base):
 
     __table_args__ = (
         UniqueConstraint("source", "event_id_source", name="uq_events_canonical_source_event_id"),
-        CheckConstraint("category IN ('conflict','disaster_natural','wildfire','mobility','humanitarian','other')", name="check_category"),
+        CheckConstraint("category IN ('conflict','disaster_natural','wildfire','mobility','humanitarian','thermal_anomaly','other')", name="check_category"),
         CheckConstraint("severity BETWEEN 0 AND 10", name="check_severity"),
         CheckConstraint("confidence BETWEEN 0 AND 10", name="check_confidence"),
         CheckConstraint("geometry_type IN ('POINT','POLYGON','MULTIPOLYGON')", name="check_geometry_type"),

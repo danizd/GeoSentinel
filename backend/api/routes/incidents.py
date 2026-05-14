@@ -81,6 +81,7 @@ def list_incidents(
     rows = db.execute(
         select(Incident, ST_AsText(Incident.canonical_point))
         .where(where_clause)
+        .order_by(Incident.last_seen.desc())
         .offset(offset)
         .limit(limit)
     ).all()

@@ -90,6 +90,14 @@ export function Dashboard() {
             >
               BUQUES
             </button>
+            <button
+              onClick={() => toggleLayer('bases')}
+              className={`px-2 py-1 text-xs font-mono rounded border ${
+                layers.bases ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
+              }`}
+            >
+              BASES
+            </button>
           </div>
           {isFetching && (
             <div className="flex items-center gap-2 text-xs text-text-secondary">

@@ -16,6 +16,7 @@ KM_MAX = {
     "earthquake": 100.0,
     "disaster_natural": 75.0,
     "mobility": 30.0,
+    "thermal_anomaly": 15.0,
 }
 
 HOURS_MAX = {
@@ -24,6 +25,7 @@ HOURS_MAX = {
     "earthquake": 2.0,
     "disaster_natural": 72.0,
     "mobility": 6.0,
+    "thermal_anomaly": 12.0,
 }
 
 WEIGHTS_SPACE = {
@@ -32,6 +34,7 @@ WEIGHTS_SPACE = {
     "earthquake": 0.5,
     "disaster_natural": 0.5,
     "mobility": 0.8,
+    "thermal_anomaly": 0.7,
 }
 
 WEIGHTS_TIME = {
@@ -40,6 +43,7 @@ WEIGHTS_TIME = {
     "earthquake": 0.5,
     "disaster_natural": 0.5,
     "mobility": 0.2,
+    "thermal_anomaly": 0.3,
 }
 
 EPSILON = {
@@ -48,6 +52,7 @@ EPSILON = {
     "earthquake": 0.10,
     "disaster_natural": 0.15,
     "mobility": 0.12,
+    "thermal_anomaly": 0.15,
 }
 
 INDEPENDENCE_FACTORS = {
@@ -64,6 +69,7 @@ SOURCE_INDEPENDENCE_CLASS = {
     "adsb": "sensor",
     "marinetraffic": "sensor",
     "liveuamap": "media_derived",
+    "thermal_anomaly": "sensor",
 }
 
 MIN_SAMPLES_BY_CLASS = {

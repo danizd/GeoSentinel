@@ -23,7 +23,7 @@ export interface AoiListResponse {
 }
 
 export async function fetchAois(): Promise<AoiListResponse> {
-  const response = await fetch(`${API_BASE}/aoi`, {
+  const response = await fetch(`${API_BASE}/aoi?limit=100`, {
     headers: { 'Content-Type': 'application/json' },
   })
   if (!response.ok) {
