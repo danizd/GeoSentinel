@@ -5,7 +5,8 @@ import { useFilterStore, useMapStore } from '../stores/mapStore'
 import { IncidentMap } from '../components/map/IncidentMap'
 import { IncidentList } from '../components/panels/IncidentList'
 import { IncidentDetail } from '../components/panels/IncidentDetail'
-import { AlertTriangle, Activity, Database, ChevronDown } from 'lucide-react'
+import { RefreshPanel } from '../components/panels/RefreshPanel'
+import { AlertTriangle, Activity, Database, ChevronDown, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 const ACTIVE_SOURCES = [
@@ -25,6 +26,7 @@ export function Dashboard() {
   const { filters } = useFilterStore()
   const { selectedIncident, layers, toggleLayer } = useMapStore()
   const [showSources, setShowSources] = useState(false)
+  const [showRefresh, setShowRefresh] = useState(false)
 
   const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['incidents', filters],
@@ -97,10 +99,22 @@ export function Dashboard() {
               </span>
             </div>
           )}
+          <button
+            onClick={() => setShowRefresh(!showRefresh)}
+            className="text-text-secondary hover:text-accent-blue transition-colors"
+            title="Data Sync"
+          >
+            <RefreshCw size={16} />
+          </button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
+        {showRefresh && (
+          <div className="shrink-0">
+            <RefreshPanel />
+          </div>
+        )}
         <div className="w-[30%] min-w-[300px] border-r border-border-glow">
           <IncidentList
             incidents={data?.incidents || []}

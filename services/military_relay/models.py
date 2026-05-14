@@ -30,6 +30,7 @@ class MilitaryFlight(BaseModel):
     isInteresting: Optional[bool] = False
     confidence: Optional[float] = Field(None, ge=0.0, le=10.0)
     trail: Optional[TrailCoordinates] = Field(default=None, description="Path of last 5 positions [lon, lat]")
+    source: str = "opensky"
 
 
 class MilitaryFlightCluster(BaseModel):

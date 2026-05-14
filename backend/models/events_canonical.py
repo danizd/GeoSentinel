@@ -34,6 +34,7 @@ class EventsCanonical(Base):
     raw_event_id: Mapped[int | None] = mapped_column(Integer)
     is_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_rumor: Mapped[bool] = mapped_column(Boolean, default=False)
+    raw_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("source", "event_id_source", name="uq_events_canonical_source_event_id"),

@@ -22,7 +22,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | `E-SEC` | `seguridad.md` | Auth, secretos, exposición de API |
 | `E-STD` | `estandares-codigo.md` | **Siempre** — estilo, tests, naming |
 | `E-INFRA` | `infraestructura.md` | Docker, K8s, CI/CD, variables de entorno |
-| `E-MON` | `monitorizacion.md` | Logging, métricas, SLAs de latencia |
+| `E-MON` | `monitorizacion.md` | Lotablagging, métricas, SLAs de latencia |
 
 ### Specs funcionales `specs_funcionales/` — cargar según tarea
 
@@ -71,7 +71,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | `F-UI-AUTH` | `ui/autenticacion-ui.md` | Login, authStore, protección de rutas |
 | `F-UI-CORR` | `ui/correcciones-ui.md` | UI correcciones humanas, confirmaciones |
 | `F-UI-AOI` | `ui/aoi-ui.md` | Gestión de AOI, dibujo en mapa |
-
+| `F-UI-REFRESH` | `ui/refresh-controls.md` | Botones de actualización manual de datos |
 ---
 
 ## Combinaciones de contexto para tareas complejas
@@ -97,7 +97,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | Panel de correcciones | `E-ARCH-FRONT` + `F-UI-CORR` + `F-UI-AUTH` + `F-API-CORR` |
 | Gestión de AOI en UI | `E-ARCH-FRONT` + `F-UI-AOI` + `F-API-AOI` + `F-UI-MAP` |
 | Setup inicial del proyecto | `E-ARCH-FRONT` + `E-STD` |
-
+| Botones de refresh | `E-ARCH` + `E-ARCH-FRONT` + `E-SEC` + `F-UI-REFRESH` + `F-UI-AUTH` |
 ---
 
 ## Decisiones de diseño (no reabrir sin revisión explícita)

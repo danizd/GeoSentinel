@@ -32,10 +32,15 @@ class MilitaryFlightDTO(BaseModel):
     speed: int
     lastSeenAt: str
     aircraftType: Optional[str] = None
+    aircraftModel: Optional[str] = None
     operator: Optional[str] = None
     operatorCountry: Optional[str] = None
+    registration: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
     isInteresting: bool = False
     trail: Optional[list[list[float]]] = None
+    source: str = "opensky"
 
 
 class MilitaryFlightClusterDTO(BaseModel):

@@ -104,6 +104,7 @@ class ADSBMilitaryClient:
                 origin=raw.get("From"),
                 destination=raw.get("to"),
                 isInteresting=raw.get("interesting", False),
+                source="adsbexchange",
             )
         except Exception as e:
             logger.warning(f"Failed to parse flight: {e}")

@@ -232,6 +232,7 @@ class OpenskyClient:
                 registration=registration,
                 operator=operator_name,
                 isInteresting=is_interesting,
+                source="opensky",
             )
         except Exception as e:
             logger.warning(f"Failed to parse OpenSky flight: {e}")

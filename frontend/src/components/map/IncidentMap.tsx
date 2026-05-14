@@ -16,7 +16,7 @@ function getMilitaryColor(country?: string | null): string {
     'France': '#A855F7',
     'Luxembourg': '#84CC16',
   }
-  if (!country) return '#FFFFFF'
+  if (!country) return '#1E3A8A'
   return mapping[country] || '#FBBF24'
 }
 
@@ -227,8 +227,8 @@ function MilitaryTrailsLayer({ flights }: { flights: MilitaryFlight[] }) {
         source="military-trails-src"
         paint={{
           'line-color': ['get', 'color'],
-          'line-width': 2,
-          'line-opacity': 0.5,
+          'line-width': 3,
+          'line-opacity': 0.8,
         }}
       />
     </Source>
@@ -236,7 +236,7 @@ function MilitaryTrailsLayer({ flights }: { flights: MilitaryFlight[] }) {
 }
 
 export function IncidentMap({ incidents }: IncidentMapProps) {
-  const { viewport, layers } = useMapStore()
+  const { viewport, layers, selectedIncident } = useMapStore()
   const [is3D, setIs3D] = useState(true)
   const [selectedFlight, setSelectedFlight] = useState<MilitaryFlight | null>(null)
   const [selectedVessel, setSelectedVessel] = useState<AISVessel | null>(null)
@@ -420,6 +420,21 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
                 'circle-stroke-color': '#ffffff',
               }}
             />
+            {selectedIncident && selectedIncident.canonical_point && (
+              <Layer
+                id="incident-selected"
+                type="circle"
+                filter={['==', ['get', 'id'], selectedIncident.incident_id]}
+                paint={{
+                  'circle-radius': 24,
+                  'circle-color': '#000000',
+                  'circle-opacity': 0,
+                  'circle-stroke-width': 3,
+                  'circle-stroke-color': '#38bdf8',
+                  'circle-stroke-opacity': 1,
+                }}
+              />
+            )}
           </Source>
         )}
 
@@ -515,14 +530,18 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
               <div className="flex justify-between"><span className="text-text-primary">Vel</span> <span>{selectedFlight.speed} kts</span></div>
               <div className="flex justify-between"><span className="text-text-primary">Rumbo</span> <span>{selectedFlight.heading}&deg;</span></div>
             </div>
-            {(selectedFlight.origin || selectedFlight.destination) && (
+            {(selectedFlight.origin || selectedFlight.destination || true) && (
               <div className="border-t border-border-glow pt-1 mt-1">
-                {selectedFlight.origin && (
-                  <div className="flex justify-between"><span className="text-text-primary">Origen</span> <span>{selectedFlight.origin}</span></div>
-                )}
-                {selectedFlight.destination && (
-                  <div className="flex justify-between"><span className="text-text-primary">Destino</span> <span>{selectedFlight.destination}</span></div>
-                )}
+                <div className="flex justify-between"><span className="text-text-primary">Origen</span> <span>{selectedFlight.origin || '—'}</span></div>
+                <div className="flex justify-between"><span className="text-text-primary">Destino</span> <span>{selectedFlight.destination || '—'}</span></div>
+              </div>
+            )}
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Fuente</span> <span>{selectedFlight.source || '—'}</span></div>
+            </div>
+            {selectedFlight.trail && selectedFlight.trail.length > 0 && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="flex justify-between"><span className="text-text-primary">Ruta</span> <span>{selectedFlight.trail.length} puntos</span></div>
               </div>
             )}
             <div className="border-t border-border-glow pt-1 mt-1">
@@ -579,6 +598,76 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         </div>
       )}
 
+      {selectedIncident && (
+        <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-60 z-50 max-h-[70vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-accent-blue" />
+              <span className="text-accent-blue font-bold text-sm">{selectedIncident.event_type.toUpperCase()}</span>
+            </div>
+            <button onClick={() => useMapStore.getState().setSelectedIncident(null)} className="text-text-secondary hover:text-white text-lg leading-none">&times;</button>
+          </div>
+          <div className="space-y-1 text-text-secondary">
+            <div className="flex justify-between"><span className="text-text-primary">ID</span> <span className="font-mono text-[10px]">{selectedIncident.incident_id.slice(0, 12)}</span></div>
+            <div className="flex justify-between"><span className="text-text-primary">Status</span> <span className={`px-1 rounded text-[10px] ${selectedIncident.status === 'open' ? 'bg-accent-green' : selectedIncident.status === 'updated' ? 'bg-accent-blue' : 'bg-accent-amber'}`}>{selectedIncident.status}</span></div>
+            <div className="flex justify-between"><span className="text-text-primary">Severidad</span> <span>{selectedIncident.severity_max.toFixed(1)}</span></div>
+            <div className="flex justify-between"><span className="text-text-primary">Confianza</span> <span>{selectedIncident.confidence.toFixed(1)}</span></div>
+            {selectedIncident.raw_payload?.title && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="text-text-primary text-[10px] mb-0.5">TITULO</div>
+                <div className="text-text-primary text-[10px] leading-tight">{selectedIncident.raw_payload.title}</div>
+              </div>
+            )}
+            {selectedIncident.actors && selectedIncident.actors.length > 0 && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="text-text-primary text-[10px] mb-0.5">ACTORES</div>
+                {selectedIncident.actors.map((actor, i) => (
+                  <div key={i} className="text-[10px] leading-tight">
+                    <span className="text-accent-amber">{actor.name || '?'}</span>
+                    {actor.role && <span className="text-text-secondary"> ({actor.role})</span>}
+                    {actor.country && <span className="text-text-secondary"> · {actor.country}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedIncident.raw_payload?.url && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="text-text-primary text-[10px] mb-0.5">FUENTE</div>
+                <a
+                  href={selectedIncident.raw_payload.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-blue hover:underline text-[10px] leading-tight break-all"
+                >
+                  {selectedIncident.raw_payload.url.length > 45
+                    ? selectedIncident.raw_payload.url.slice(0, 45) + '...'
+                    : selectedIncident.raw_payload.url}
+                </a>
+              </div>
+            )}
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Fuentes</span> <span>{selectedIncident.sources.join(', ')}</span></div>
+            </div>
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Lat</span> <span className="font-mono">{selectedIncident.canonical_point?.lat.toFixed(4)}&deg;</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">Lon</span> <span className="font-mono">{selectedIncident.canonical_point?.lon.toFixed(4)}&deg;</span></div>
+            </div>
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">Observaciones</span> <span>{selectedIncident.observation_count}</span></div>
+            </div>
+            {selectedIncident.fatalities_total > 0 && (
+              <div className="border-t border-border-glow pt-1 mt-1">
+                <div className="flex justify-between"><span className="text-text-primary">Fatalidades</span> <span className="text-accent-red">{selectedIncident.fatalities_total}</span></div>
+              </div>
+            )}
+            <div className="border-t border-border-glow pt-1 mt-1">
+              <div className="flex justify-between"><span className="text-text-primary">1&ordf; detecci&oacute;n</span> <span>{new Date(selectedIncident.first_seen).toLocaleDateString()}</span></div>
+              <div className="flex justify-between"><span className="text-text-primary">&Uacute;ltima</span> <span>{new Date(selectedIncident.last_seen).toLocaleDateString()}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={() => setIs3D(!is3D)}
         className="absolute top-18
@@ -589,7 +678,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
 
       {layers.tracks && militaryLoading && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent-blue text-white text-sm font-mono px-4 py-2 rounded shadow-lg animate-pulse z-50">
-          Cargando tracks...
+          Cargando vuelos...
         </div>
       )}
 

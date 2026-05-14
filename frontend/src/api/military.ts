@@ -23,6 +23,7 @@ export interface MilitaryFlight {
   destination?: string | null
   isInteresting: boolean
   trail?: number[][] | null
+  source?: string | null
 }
 
 export interface MilitaryFlightCluster {

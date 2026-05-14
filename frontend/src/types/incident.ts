@@ -17,6 +17,19 @@ export interface Incident {
   fatalities_total: number
   sources: string[]
   observation_count: number
+  linked_event_ids?: number[]
+  raw_payload?: {
+    title?: string
+    url?: string
+    articles_count?: number
+    [key: string]: unknown
+  }
+  actors?: Array<{
+    name?: string
+    role?: string
+    cameo_code?: string
+    country?: string
+  }>
 }
 
 export interface IncidentListResponse {

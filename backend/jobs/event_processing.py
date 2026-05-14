@@ -50,6 +50,7 @@ def process_and_upsert_event(
         raw_event_id=event.raw_event_id,
         is_confirmed=event.is_confirmed,
         is_rumor=event.is_rumor,
+        raw_payload=event.raw_payload,
     )
 
     session.add(new_event)

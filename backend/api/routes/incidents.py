@@ -12,6 +12,7 @@ from backend.api.schemas.incidents import IncidentFilters, IncidentListResponse,
 from backend.api.database import get_db
 from backend.models.aoi import Aoi
 from backend.models.incidents import Incident
+from backend.models.events_canonical import EventsCanonical
 
 router = APIRouter()
 
@@ -86,6 +87,16 @@ def list_incidents(
 
     incidents = []
     for inc, point_wkt in rows:
+        first_event_raw = None
+        first_event_actors = None
+        if inc.linked_event_ids:
+            first_event = db.execute(
+                select(EventsCanonical).where(EventsCanonical.id.in_(inc.linked_event_ids)).limit(1)
+            ).scalar_one_or_none()
+            if first_event:
+                first_event_raw = first_event.raw_payload
+                first_event_actors = first_event.actors
+
         incidents.append(IncidentResponse(
             incident_id=inc.incident_id,
             status=inc.status,
@@ -100,6 +111,9 @@ def list_incidents(
             fatalities_total=inc.fatalities_total,
             sources=inc.sources,
             observation_count=inc.observation_count,
+            linked_event_ids=inc.linked_event_ids,
+            raw_payload=first_event_raw,
+            actors=first_event_actors,
         ))
 
     return IncidentListResponse(total=total, page=page, incidents=incidents)
@@ -116,6 +130,17 @@ def get_incident(incident_id: UUID, db: Session = Depends(get_db)) -> IncidentRe
         raise HTTPException(status_code=404, detail="Incident not found")
 
     incident, point_wkt = row
+
+    first_event_raw = None
+    first_event_actors = None
+    if incident.linked_event_ids:
+        first_event = db.execute(
+            select(EventsCanonical).where(EventsCanonical.id.in_(incident.linked_event_ids)).limit(1)
+        ).scalar_one_or_none()
+        if first_event:
+            first_event_raw = first_event.raw_payload
+            first_event_actors = first_event.actors
+
     return IncidentResponse(
         incident_id=incident.incident_id,
         status=incident.status,
@@ -130,4 +155,7 @@ def get_incident(incident_id: UUID, db: Session = Depends(get_db)) -> IncidentRe
         fatalities_total=incident.fatalities_total,
         sources=incident.sources,
         observation_count=incident.observation_count,
+        linked_event_ids=incident.linked_event_ids,
+        raw_payload=first_event_raw,
+        actors=first_event_actors,
     )

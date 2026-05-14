@@ -24,6 +24,9 @@ class IncidentResponse(BaseModel):
     fatalities_total: int | None = None
     sources: list[str] | None = None
     observation_count: int | None = None
+    linked_event_ids: list[int] | None = None
+    raw_payload: dict | None = None
+    actors: list[dict] | None = None
 
 
 class IncidentListResponse(BaseModel):

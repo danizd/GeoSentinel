@@ -19,8 +19,8 @@ export function Info() {
           <Item color="#ef4444" label="Círculos rojos" desc="Conflictos activos (guerras, batallas, protestas violentas)." />
           <Item color="#fbbf24" label="Círculos amarillos" desc="Desastres naturales (terremotos, tsunamis, erupciones)." />
           <Item color="#f97316" label="Círculos naranjas" desc="Incendios activos detectados por satélites de la NASA." />
-          <Item color="#38bdf8" label="Zonas azules" desc="Áreas de interés: regiones que se están monitorizando." />
-          <Item color="#3B82F6" label="Aviones ✈" desc="Vuelos militares en tiempo real. Cada avión apunta en la dirección de vuelo." />
+          <Item color="#38bdf8" label="Zonas azules" desc="Áreas de Interés (AOI). Solo se buscan datos dentro de estas zonas." />
+          <Item color="#1E3A8A" label="Aviones ✈" desc="Vuelos militares en tiempo real. Cada avión apunta en la dirección de vuelo." />
           <Item color="#94A3B8" label="Barcos ⛵" desc="Buques de guerra y navales. Los que parpadean más tenues pueden estar ocultando su posición." />
         </Section>
 
@@ -43,9 +43,25 @@ export function Info() {
             Los vuelos militares se identifican por su código de identificación o por patrones en su señal de radio.
             Los barcos se rastrean por el sistema AIS, obligatorio para la navegación.
           </p>
-          <p className="text-text-secondary leading-relaxed">
+          <p className="text-text-secondary leading-relaxed mb-3">
             El mapa usa tecnología de Mapbox y puede verse en modo 2D (callejero) o 3D (globo terráqueo).
             Los datos se actualizan automáticamente cada 30 segundos.
+          </p>
+        </Section>
+
+        <Section icon={<Eye size={20} />} title="¿Dónde se buscan los datos?">
+          <p className="text-text-secondary leading-relaxed mb-3">
+            <strong className="text-text-primary">GeoSentinel solo busca incidentes, vuelos y buques dentro de las Áreas de Interés (AOI) definidas.</strong>
+            {' '}Si no hay zonas activas, no se recupera ningún dato. Las fuentes externas no se consultan de forma global.
+          </p>
+          <p className="text-text-secondary leading-relaxed mb-3">
+            Cada AOI es un polígono geográfico con un nombre (ej. "Irán", "Europa + Norte de Marruecos").
+            Cuando activas un botón (VUELOS, BUQUES, PUNTOS, CALOR), el sistema usa las coordenadas de cada zona activa
+            para filtrar las consultas a las fuentes de datos.
+          </p>
+          <p className="text-text-secondary leading-relaxed">
+            Las zonas se crean manualmente desde base de datos. Si necesitas monitorizar una región nueva,
+            hay que añadir su AOI con las coordenadas correctas.
           </p>
         </Section>
 
