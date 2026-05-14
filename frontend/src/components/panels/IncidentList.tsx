@@ -88,10 +88,10 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
                       style={{ width: `${(incident.severity_max / 10) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs text-text-secondary font-mono shrink-0">SEV {incident.severity_max.toFixed(1)}</span>
+                  <span className="text-xs text-text-secondary font-mono shrink-0">Severidad: {incident.severity_max.toFixed(1)}</span>
                 </div>
                 <div className="text-xs text-text-secondary mt-1">
-                  {incident.sources.join(' · ')}
+                  Fuente: {incident.sources.join(' · ')}
                 </div>
                 <div className="text-xs text-text-secondary mt-0.5">
                   {formatDistanceToNow(new Date(incident.last_seen), { addSuffix: true })}

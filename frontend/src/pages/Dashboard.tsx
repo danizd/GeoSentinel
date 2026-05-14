@@ -123,7 +123,7 @@ export function Dashboard() {
             <RefreshPanel />
           </div>
         )}
-        <div className="w-[30%] min-w-[300px] border-r border-border-glow">
+        <div className="w-[25%] min-w-[200px] border-r border-border-glow">
           <IncidentList
             incidents={data?.incidents || []}
             total={data?.total || 0}
