@@ -8,10 +8,24 @@ ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-COPY backend/pyproject.toml /app/backend/
-COPY backend/ /app/backend/
+COPY backend/pyproject.toml /app/backend/pyproject.toml
 
-RUN uv pip install --system --no-cache /app/backend
+RUN uv pip install --system --no-cache \
+    alembic \
+    fastapi \
+    geoalchemy2 \
+    "psycopg[binary]" \
+    psycopg2-binary \
+    python-dotenv \
+    sqlalchemy \
+    uvicorn[standard] \
+    pydantic \
+    requests \
+    scikit-learn \
+    numpy \
+    shapely
+
+COPY backend/ /app/backend/
 
 EXPOSE 8000
 

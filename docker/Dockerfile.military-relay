@@ -8,13 +8,25 @@ ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-COPY pyproject.toml /app/
-COPY backend/pyproject.toml /app/backend/
+COPY backend/pyproject.toml /app/backend/pyproject.toml
+
+RUN uv pip install --system --no-cache \
+    fastapi \
+    "psycopg[binary]" \
+    psycopg2-binary \
+    python-dotenv \
+    sqlalchemy \
+    uvicorn[standard] \
+    pydantic \
+    requests \
+    scikit-learn \
+    numpy \
+    shapely \
+    websockets
+
 COPY backend/ /app/backend/
 COPY services/ /app/services/
 COPY data/military_hex.txt /app/data/military_hex.txt
-
-RUN uv pip install --system --no-cache -r /app/backend/pyproject.toml
 
 EXPOSE 8002
 
