@@ -1,6 +1,6 @@
 # Sistema de Desarrollo por Especificaciones (SDD)
 ## Metodología aplicada en GEO SENTINEL
-
+### NOTA IMPORTANTE: Esta metodología esta en revisión y es susceptible de ajustes y mejoras a todos los niveles
 ---
 
 ## 1. Visión general
@@ -8,6 +8,18 @@
 GEO SENTINEL se desarrolla siguiendo un sistema de **Specification-Driven Development (SDD)**: antes de escribir cualquier línea de código, cada funcionalidad queda completamente definida en archivos Markdown estructurados. La IA de desarrollo lee esas especificaciones como contexto obligatorio y las usa como fuente de verdad durante la implementación.
 
 El objetivo es eliminar la ambigüedad que produce código inconsistente cuando se le pide a una IA que implemente algo sin contexto suficiente. En lugar de describir lo que queremos en el prompt, lo describimos en specs permanentes y el prompt solo señala qué leer.
+
+Fase A — Diseño
+Specs estructurales
+Specs funcionales
+AGENTS.md
+Fase B — Implementación
+Prompt de Claude
+Minimax M2.7
+Verificación manual
+Fase C — Correcciones
+Vibe Coding
+Sin re-contextualizar
 
 ---
 
@@ -88,7 +100,7 @@ Contiene exclusivamente:
 
 **Regla obligatoria de lectura previa**: directiva explícita que indica que ninguna línea de código puede escribirse sin haber leído las specs correspondientes.
 
-**Tabla de enrutamiento Tarea → Spec**: índice completo que mapea cada tipo de tarea al conjunto exacto de archivos que deben leerse. Organizada en dos bloques (estructurales y funcionales) y subdividida por capa (ingesta, normalización, procesamiento, API, UI).
+**Tabla de enrutamiento de fuentes de la verdad. Tarea → Spec**: índice completo que mapea cada tipo de tarea al conjunto exacto de archivos que deben leerse. Organizada en dos bloques (estructurales y funcionales) y subdividida por capa (ingesta, normalización, procesamiento, API, UI).
 
 **Combinaciones de contexto**: tabla que indica qué specs cargar simultáneamente para tareas complejas que tocan varias capas. Por ejemplo, implementar un ingestor requiere leer arquitectura + fuentes + estándares + la spec funcional + normalización + deduplicación + validación, todo junto.
 

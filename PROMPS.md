@@ -141,6 +141,7 @@ El motivo es técnico: la ventana de contexto de la IA se llena, las specs relev
 | **Ingestor FIRMS** | Polling con retry/backoff, bbox dinámico por AOI, tipo 0/1 (excluye type 2/3), deduplicación SHA-256 |
 | **Ingestor GDELT** | API GDELT Cloud v2 (gdeltcloud.com/api/v2), ventana 5 min (max 29 días), Bearer auth, análisis de título para event_type, deduplicación por `globalEventId` |
 | **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicación por `event_id` |
+| **Relay AIS** | WebSocket AISStream (con mock fallback), bbox por AOI, puerto 8003 |
 | **Normalización** | Mappers para USGS, FIRMS, GDELT, ACLED → `EventCanonicalCreate` |
 | **Validación** | 6 reglas de rechazo, quarantine con código de error |
 | **Deduplicación** | Upsert por `(source, event_id_source)` |
@@ -162,14 +163,14 @@ El motivo es técnico: la ventana de contexto de la IA se llena, las specs relev
 | **Bus de eventos (Kafka/Redis)** | Media | MVP usa llamadas síncronas |
 | **Job de purga/archivado** | Baja | Tabla `incidents_archive` no creada |
 | **`canonical_point` como GEOMETRY** | Media | Actualmente WKT String |
-| **Ingestor ACLED** | Alta | Cuenta temporalmente bloqueada por intentos fallidos, reintentar |
+| **Ingestor ACLED** | Alta | Cuenta desbloqueada, endpoint migrado a `acleddata.com/api/acled/read` |
 | **Tests pytest** | Alta | Cobertura baja |
 
 ### Scripts disponibles
 
 ```
 scripts/
-├── run_acled.py           # Ingestor ACLED (OAuth2, espera desbloqueo de cuenta)
+├── run_acled.py           # Ingestor ACLED (OAuth2, endpoint migrado)
 ├── run_clustering.py     # Job de clustering
 ├── run_firms.py           # Ingestor FIRMS
 ├── run_gdelt.py           # Ingestor GDELT Cloud v2
@@ -202,9 +203,9 @@ scripts/
 
 ### Próximos pasos recomendados
 
-1. **Probar ACLED** cuando se desbloquee la cuenta (credenciales correctas en `.env`, endpoint migrado a `acleddata.com/api/acled/read`)
-2. **Añadir tests pytest** para ingestores y normalizadores
-3. **Implementar JWT auth** para la API
+1. **Configurar `AISSTREAM_API_KEY`** para datos reales de buques (sin ella usa mock)
+2. **Probar ACLED** cuando se desbloquee la cuenta (credenciales correctas en `.env`)
+3. **Añadir tests pytest** para ingestores y normalizadores
 4. **Crear job de purga** para incidentes archivados
 5. **Migrar `canonical_point`** a `GEOMETRY(POINT,4326)`
 

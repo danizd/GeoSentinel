@@ -2,6 +2,7 @@ import logging
 import os
 
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -84,7 +85,7 @@ def list_ais_vessels(db: Session = Depends(get_db)) -> AISVesselsResponseDTO:
     all_vessels: list[dict] = []
     is_stale = False
 
-    for aoi in aois:
+    def _fetch_aoi(aoi: dict) -> list[dict]:
         try:
             response = requests.get(
                 f"{AIS_RELAY_URL}/api/ais/v1/list-vessels",
@@ -94,19 +95,25 @@ def list_ais_vessels(db: Session = Depends(get_db)) -> AISVesselsResponseDTO:
                     "swLat": aoi["min_lat"],
                     "swLon": aoi["min_lon"],
                 },
-                timeout=30,
+                timeout=5,
             )
             response.raise_for_status()
             data = response.json()
-
             if response.headers.get("X-Stale", "").lower() == "true":
-                is_stale = True
-
-            all_vessels.extend(data.get("vessels", []))
-
+                return data.get("vessels", []) + [("__stale__",)]
+            return data.get("vessels", [])
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to fetch AIS vessels for AOI {aoi['name']}: {e}")
-            continue
+            return []
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_fetch_aoi, aoi): aoi for aoi in aois}
+        for future in as_completed(futures):
+            for v in future.result():
+                if v == ("__stale__",):
+                    is_stale = True
+                else:
+                    all_vessels.append(v)
 
     unique: dict[str, dict] = {}
     for v in all_vessels:

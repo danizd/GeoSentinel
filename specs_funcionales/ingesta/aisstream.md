@@ -210,13 +210,13 @@ Variable de entorno: `DARK_SHIP_THRESHOLD_MIN=20` (configurable)
 ```dotenv
 # Relay
 AISSTREAM_API_KEY=               # nunca exponer al cliente
+AIS_RELAY_URL=http://localhost:8003
 AIS_SNAPSHOT_INTERVAL_MS=3000    # cadencia de escritura en Redis
 DARK_SHIP_THRESHOLD_MIN=20       # minutos sin señal para marcar isDark
 AIS_UPSTREAM_QUEUE_HIGH_WATER=   # watermark alto de cola upstream
 AIS_UPSTREAM_QUEUE_LOW_WATER=    # watermark bajo de cola upstream
 
 # Ingestor
-AIS_RELAY_BASE_URL=http://ais-relay:8001
 AIS_POLL_EVENTS_MS=5000          # frecuencia de /api/ais/events
 ```
 

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export interface Location {
   latitude: number
@@ -40,7 +40,7 @@ export interface MilitaryFlightsResponse {
 }
 
 export async function fetchMilitaryFlights(): Promise<MilitaryFlightsResponse> {
-  const response = await fetch(`${API_BASE}/military-flights`, {
+  const response = await fetch(`${API_BASE_URL}/v1/military-flights`, {
     headers: {
       'Content-Type': 'application/json',
     },

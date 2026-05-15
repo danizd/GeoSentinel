@@ -405,7 +405,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     enabled: layers.aoi,
   })
 
-  const { data: aisData } = useQuery({
+  const { data: aisData, isLoading: aisLoading } = useQuery({
     queryKey: ['ais-vessels'],
     queryFn: fetchAISVessels,
     refetchInterval: POLLING_INTERVAL_MS,
@@ -950,8 +950,20 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         </div>
       )}
 
-      {layers.tracks && militaryData?.isStale && (
+      {layers.vessels && aisLoading && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent-amber text-bg-base text-sm font-mono px-4 py-2 rounded shadow-lg animate-pulse z-50">
+          Cargando buques...
+        </div>
+      )}
+
+      {layers.vessels && aisData?.isStale && (
         <div className="absolute top-16 right-2 bg-yellow-600 text-white text-xs px-2 py-1 rounded z-50">
+          Datos AIS simulados
+        </div>
+      )}
+
+      {layers.tracks && militaryData?.isStale && (
+        <div className="absolute top-10 right-2 bg-yellow-600 text-white text-xs px-2 py-1 rounded z-50">
           Stale data
         </div>
       )}

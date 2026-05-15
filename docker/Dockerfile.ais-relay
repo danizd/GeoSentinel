@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+COPY pyproject.toml /app/
+COPY services/ /app/services/
+
+RUN uv pip install --system --no-cache fastapi uvicorn[standard] websockets requests pydantic
+
+EXPOSE 8003
+
+CMD ["uvicorn", "services.ais_relay.main:app", "--host", "0.0.0.0", "--port", "8003"]

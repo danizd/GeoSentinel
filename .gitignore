@@ -1,6 +1,7 @@
 # Variables de entorno (no commitear secretos)
 .env
 .env.local
+.env.production
 .env.*.local
 
 # Python

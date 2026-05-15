@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export interface VesselLocation {
   latitude: number
@@ -36,7 +36,7 @@ export interface AISVesselsResponse {
 }
 
 export async function fetchAISVessels(): Promise<AISVesselsResponse> {
-  const response = await fetch(`${API_BASE}/ais-vessels`, {
+  const response = await fetch(`${API_BASE_URL}/v1/ais-vessels`, {
     headers: { 'Content-Type': 'application/json' },
   })
   if (!response.ok) {

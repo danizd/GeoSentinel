@@ -546,11 +546,11 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 ```dotenv
 # Relay
 AISSTREAM_API_KEY=
+AIS_RELAY_URL=http://localhost:8003
 AIS_SNAPSHOT_INTERVAL_MS=3000
 DARK_SHIP_THRESHOLD_MIN=20
 
 # Ingestor
-AIS_RELAY_BASE_URL=http://ais-relay:8001
 AIS_POLL_EVENTS_MS=5000
 ```
 

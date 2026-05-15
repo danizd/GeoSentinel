@@ -1,0 +1,71 @@
+# GeoSentinel — Production Docker Compose
+# Connects to existing postgres container on database_network
+#
+# Prerequisites:
+#   1. Create database: docker exec -it postgres psql -U admin -c "CREATE DATABASE geosentinel;"
+#   2. Run migrations:  docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+#   3. NPM proxy host:  geosentinel.movilab.es → frontend:80
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: geosentinel-backend
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - DATABASE_URL=postgresql://admin:ad6t88xbVI@postgres:5432/geosentinel
+      - MILITARY_RELAY_URL=http://military-relay:8002
+      - AIS_RELAY_URL=http://ais-relay:8003
+    networks:
+      - geosentinel_net
+      - database_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ais-relay:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ais-relay
+    container_name: geosentinel-ais
+    restart: unless-stopped
+    env_file: .env.production
+    networks:
+      - geosentinel_net
+
+  military-relay:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.military-relay
+    container_name: geosentinel-military
+    restart: unless-stopped
+    env_file: .env.production
+    networks:
+      - geosentinel_net
+      - database_network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        - VITE_API_BASE_URL=
+        - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
+    container_name: geosentinel-frontend
+    restart: unless-stopped
+    networks:
+      - geosentinel_net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  geosentinel_net:
+    driver: bridge
+  database_network:
+    external: true

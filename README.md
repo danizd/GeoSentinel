@@ -94,11 +94,11 @@ Crea un archivo `.env` en la raiz del proyecto (nunca commitear):
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/geosentinel
 FIRMS_MAP_KEY=tu_api_key_aqui
 GDELT_API_KEY=tu_gdelt_api_key
-ACLED_ACCESS_TOKEN=tu_acled_access_token
 ACLED_USERNAME=tu_email_registrado_en_acled
 ACLED_PASSWORD=tu_password_de_acled
+AISSTREAM_API_KEY=tu_aisstream_api_key
 OPENSKY_CLIENT_ID=tu_opensky_client_id
-OPENSKY_CLIENT_SECRET=tu_opensky_client_secret
+OPENSKY_CLIENT_SECRET=tu_opensky_secret
 MILITARY_SOURCE=opensky
 MILITARY_RELAY_URL=http://localhost:8002
 VITE_MAPBOX_TOKEN=tu_mapbox_token
@@ -147,6 +147,78 @@ python -m services.military_relay.main
 ```
 
 El relay escuchara en `http://localhost:8002` (o la URL configurada en `MILITARY_RELAY_URL`).
+
+---
+
+## Despliegue en produccion (Docker)
+
+### Arquitectura de contenedores
+
+| Servicio | Puerto interno | Descripcion |
+|----------|---------------|-------------|
+| `backend` | 8000 | FastAPI (incidents, admin, health) |
+| `ais-relay` | 8003 | WebSocket AISStream + mock fallback |
+| `military-relay` | 8002 | Relay vuelos militares (OpenSky) |
+| `frontend` | 80 | Nginx sirviendo React build + proxy `/v1/` |
+
+Todos los servicios se conectan a un PostgreSQL existente (contenedor `postgres` en `database_network`).
+
+### Requisitos previos
+
+1. PostgreSQL 16 + PostGIS ya corriendo en el servidor (contenedor `postgres`, red `database_network`)
+2. Nginx Proxy Manager gestionando SSL para `geosentinel.movilab.es`
+3. Docker y Docker Compose v2 instalados
+
+### Pasos
+
+```bash
+# 1. Crear la base de datos (solo la primera vez)
+docker exec -it postgres psql -U admin -c "CREATE DATABASE geosentinel;"
+
+# 2. Construir y levantar todos los servicios
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Ejecutar migraciones
+docker exec -it geosentinel-backend alembic upgrade head
+
+# 4. Seed de datos iniciales
+docker exec -it geosentinel-backend python -c "from backend.api.routes.seed import seed; ..."
+
+# 5. Verificar salud
+curl http://localhost:8000/v1/health
+```
+
+### Nginx Proxy Manager
+
+Crear un Proxy Host en NPM:
+- **Domain**: `geosentinel.movilab.es`
+- **Forward to**: `http://geosentinel-frontend:80`
+- **SSL**: Enable, Force SSL, HTTP/2
+- No hace falta Custom Locations porque el frontend nginx ya hace proxy de `/v1/` al backend
+
+### Variables de entorno
+
+Ver `.env.production` para la lista completa. Variables clave:
+- `DATABASE_URL`: conexion a postgres (interno Docker)
+- `VITE_MAPBOX_TOKEN`: token de Mapbox (build-time, pasar como `--build-arg`)
+- `VITE_API_BASE_URL`: vacio en produccion (same-origin)
+
+### Comandos utiles
+
+```bash
+# Logs
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f ais-relay
+
+# Reiniciar un servicio
+docker compose -f docker-compose.prod.yml restart backend
+
+# Reconstruir solo el frontend
+docker compose -f docker-compose.prod.yml up -d --build frontend
+
+# Parar todo
+docker compose -f docker-compose.prod.yml down
+```
 
 ---
 
@@ -391,8 +463,13 @@ geosentinel/
 │   │   ├── gdelt_mapper.py      # GDELT Events v2 -> EventCanonicalCreate
 │   │   └── acled_mapper.py      # ACLED JSON -> EventCanonicalCreate
 ├── services/
-│   └── military_relay/          # Relay FastAPI para flights militares (OpenSky)
-│       └── main.py              # Servidor en puerto 8002
+│   ├── military_relay/          # Relay FastAPI para flights militares (OpenSky)
+│   │   └── main.py              # Servidor en puerto 8002
+│   └── ais_relay/               # Relay FastAPI para buques AIS (AISStream/mock)
+│       ├── main.py              # Servidor en puerto 8003
+│       ├── config.py
+│       ├── models.py
+│       └── aisstream_client.py  # Cliente WebSocket AISStream
 │   ├── jobs/
 │   │   ├── clustering_job.py    # DBSCAN espacio-temporal + metricas
 │   │   ├── event_processing.py  # Upsert en events_canonical
@@ -421,13 +498,27 @@ geosentinel/
 │   │   ├── types/
 │   │   │   └── incident.ts            # Tipos TypeScript
 │   │   └── api/
-│   │       └── incidents.ts           # Llamadas a la API backend
+│   │       ├── incidents.ts     # GET /v1/incidents
+│   │       ├── aois.ts          # GET /v1/aoi
+│   │       ├── military.ts      # GET /v1/military-flights
+│   │       ├── ais.ts           # GET /v1/ais-vessels
+│   │       └── admin.ts         # POST /v1/admin/run
 │   ├── public/
 │   └── package.json
 ├── specs_estructurales/     # E-ARCH, E-MODEL, E-SEC, E-STD, E-MON...
 ├── specs_funcionales/       # F-ING-*, F-NORM-*, F-CLUST, F-LC, F-API-*
-├── docker-compose.yml       # PostgreSQL 16 + PostGIS 3.4
-└── pyproject.toml           # Dependencias gestionadas con uv
+├── docker-compose.yml           # PostgreSQL 16 + PostGIS 3.4 (dev local)
+├── docker-compose.prod.yml      # Produccion: backend + relays + frontend
+├── docker/
+│   ├── Dockerfile.backend       # FastAPI + uvicorn
+│   ├── Dockerfile.frontend      # Node build + nginx
+│   ├── Dockerfile.ais-relay     # AIS relay FastAPI
+│   ├── Dockerfile.military-relay # Military relay FastAPI
+│   ├── nginx/
+│   │   └── geosentinel.conf     # Nginx reverse proxy config
+│   └── .dockerignore
+├── .env.production              # Variables de produccion
+└── pyproject.toml               # Dependencias gestionadas con uv
 ```
 
 ---

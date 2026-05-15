@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export interface AoiGeometry {
   type: string
@@ -23,7 +23,7 @@ export interface AoiListResponse {
 }
 
 export async function fetchAois(): Promise<AoiListResponse> {
-  const response = await fetch(`${API_BASE}/aoi?limit=100`, {
+  const response = await fetch(`${API_BASE_URL}/v1/aoi?limit=100`, {
     headers: { 'Content-Type': 'application/json' },
   })
   if (!response.ok) {
