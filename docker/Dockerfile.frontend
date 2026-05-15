@@ -6,7 +6,7 @@ ARG VITE_MAPBOX_TOKEN
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci
+RUN npm install --no-audit --no-bin-links
 
 COPY frontend/ ./
 
