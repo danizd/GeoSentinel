@@ -4,7 +4,7 @@
 # Prerequisites:
 #   1. Create database: docker exec -it postgres psql -U admin -c "CREATE DATABASE geosentinel;"
 #   2. Run migrations:  docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
-#   3. NPM proxy host:  geosentinel.movilab.es → frontend:80
+#   3. NPM proxy host:  geosentinel.movilab.es → frontend:9090
 
 services:
   backend:
@@ -14,11 +14,7 @@ services:
     container_name: geosentinel-backend
     restart: unless-stopped
     env_file: .env.production
-    environment:
-      - DATABASE_URL=postgresql://admin:ad6t88xbVI@postgres:5432/geosentinel
-      - MILITARY_RELAY_URL=http://military-relay:8002
-      - AIS_RELAY_URL=http://ais-relay:8003
-networks:
+    networks:
       - geosentinel_net
       - database_network
     healthcheck:
