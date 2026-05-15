@@ -1,8 +1,9 @@
 import { useMapStore, useFilterStore } from '../../stores/mapStore'
 import type { Incident } from '../../types/incident'
 import { STATUS_COLORS } from '../../types/incident'
-import { getIncidentColor, getHeadline } from '../../utils/colors'
+import { getIncidentColor, getHeadline, getSeverityColor } from '../../utils/colors'
 import { formatDistanceToNow } from 'date-fns'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface IncidentListProps {
   incidents: Incident[]
@@ -84,17 +85,15 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
                 <div className="flex items-center gap-2 mt-1.5">
                   <div className="flex-1 h-1.5 bg-bg-base rounded overflow-hidden">
                     <div
-                      className="h-full bg-accent-blue"
-                      style={{ width: `${(incident.severity_max / 10) * 100}%` }}
+                      className="h-full"
+                      style={{ width: `${(incident.severity_max / 10) * 100}%`, backgroundColor: getSeverityColor(incident.severity_max) }}
                     />
                   </div>
                   <span className="text-xs text-text-secondary font-mono shrink-0">Severidad: {incident.severity_max.toFixed(1)}</span>
                 </div>
-                <div className="text-xs text-text-secondary mt-1">
-                  Fuente: {incident.sources.join(' · ')}
-                </div>
-                <div className="text-xs text-text-secondary mt-0.5">
-                  {formatDistanceToNow(new Date(incident.last_seen), { addSuffix: true })}
+                <div className="text-xs text-gray-400 mt-1 flex gap-2">
+                  <span>Fuente: {incident.sources.join(' · ')}</span>
+                  <span className="ml-auto">{formatDistanceToNow(new Date(incident.last_seen), { addSuffix: true })}</span>
                 </div>
               </div>
             )
@@ -102,8 +101,22 @@ export function IncidentList({ incidents, total, page, isLoading }: IncidentList
         )}
       </div>
 
-      <div className="p-3 border-t border-border-glow text-xs text-text-secondary font-mono">
-        {total} incidentes · Pág {page} de {Math.ceil(total / (filters.limit || 20))}
+      <div className="p-3 border-t border-border-glow flex items-center justify-between text-xs text-text-secondary font-mono">
+        <button
+          onClick={() => setFilters({ page: page - 1 })}
+          disabled={page <= 1}
+          className="p-1 rounded hover:bg-bg-panel disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span>{total} incidentes · Pág {page} de {Math.ceil(total / (filters.limit || 20))}</span>
+        <button
+          onClick={() => setFilters({ page: page + 1 })}
+          disabled={page >= Math.ceil(total / (filters.limit || 20))}
+          className="p-1 rounded hover:bg-bg-panel disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
     </div>
   )

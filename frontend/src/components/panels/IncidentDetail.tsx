@@ -15,7 +15,7 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
   const headline = getHeadline(incident)
 
   return (
-    <div className="bg-bg-panel border-l border-border-glow h-full flex flex-col">
+    <div className="bg-bg-panel border-l border-border-glow h-full flex flex-col w-full">
       <div className="p-4 border-b border-border-glow flex items-center justify-between">
         <h2 className="font-mono text-sm text-accent-blue">DETALLE</h2>
         <button
@@ -98,10 +98,14 @@ export function IncidentDetail({ incident }: IncidentDetailProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-<div className="font-mono text-xs text-text-secondary mb-1">1ª detección</div>
-
+            <div className="font-mono text-xs text-text-secondary mb-1">1ª detección</div>
+            <div className="font-mono text-sm text-text-primary">
+              {formatDistanceToNow(new Date(incident.first_seen), { addSuffix: true })}
+            </div>
+          </div>
+          <div>
             <div className="font-mono text-xs text-text-secondary mb-1">Última detección</div>
             <div className="font-mono text-sm text-text-primary">
               {formatDistanceToNow(new Date(incident.last_seen), { addSuffix: true })}

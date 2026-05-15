@@ -95,7 +95,8 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/geosentinel
 FIRMS_MAP_KEY=tu_api_key_aqui
 GDELT_API_KEY=tu_gdelt_api_key
 ACLED_ACCESS_TOKEN=tu_acled_access_token
-ACLED_EMAIL=tu_email_registrado_en_acled
+ACLED_USERNAME=tu_email_registrado_en_acled
+ACLED_PASSWORD=tu_password_de_acled
 OPENSKY_CLIENT_ID=tu_opensky_client_id
 OPENSKY_CLIENT_SECRET=tu_opensky_client_secret
 MILITARY_SOURCE=opensky
@@ -301,7 +302,7 @@ uv run python backend/scripts/run_gdelt.py
 
 ### Ingestor ACLED (conflictos estructurados, batch 48h)
 
-Requiere `ACLED_ACCESS_TOKEN` y `ACLED_EMAIL`. Descarga las ultimas 48h:
+Requiere `ACLED_USERNAME` y `ACLED_PASSWORD` (obtiene token via OAuth2 automáticamente). Descarga las ultimas 48h:
 
 ```bash
 cd backend

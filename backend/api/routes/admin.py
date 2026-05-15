@@ -206,39 +206,6 @@ def _require_admin():
     pass
 
 
-@router.post("/admin/run/{source}", response_model=JobResponse, status_code=202)
-async def run_single_job(source: str, background_tasks: BackgroundTasks):
-    if source not in SCRIPTS:
-        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
-
-    async with _JOBS_LOCK:
-        existing = _get_running_job(source)
-        if existing:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": "job_already_running",
-                    "job": source,
-                    "running_since": existing["started_at"],
-                    "job_id": existing["job_id"],
-                },
-            )
-
-    job_id, record = _create_job_record(source)
-
-    async def task():
-        return await _run_script(SCRIPTS[source])
-
-    background_tasks.add_task(_background_job, job_id, source, task)
-
-    return JobResponse(
-        job=source,
-        status="running",
-        started_at=record["started_at"],
-        job_id=job_id,
-    )
-
-
 @router.post("/admin/run/lifecycle", response_model=JobResponse, status_code=202)
 async def run_lifecycle(background_tasks: BackgroundTasks):
     async with _JOBS_LOCK:
@@ -346,6 +313,39 @@ async def run_all_jobs(background_tasks: BackgroundTasks):
 
     return JobResponse(
         job="all",
+        status="running",
+        started_at=record["started_at"],
+        job_id=job_id,
+    )
+
+
+@router.post("/admin/run/{source}", response_model=JobResponse, status_code=202)
+async def run_single_job(source: str, background_tasks: BackgroundTasks):
+    if source not in SCRIPTS:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
+
+    async with _JOBS_LOCK:
+        existing = _get_running_job(source)
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "job_already_running",
+                    "job": source,
+                    "running_since": existing["started_at"],
+                    "job_id": existing["job_id"],
+                },
+            )
+
+    job_id, record = _create_job_record(source)
+
+    async def task():
+        return await _run_script(SCRIPTS[source])
+
+    background_tasks.add_task(_background_job, job_id, source, task)
+
+    return JobResponse(
+        job=source,
         status="running",
         started_at=record["started_at"],
         job_id=job_id,

@@ -3,10 +3,10 @@
 > Cargar junto con: `E-ARCH` + `E-SOURCES` + `E-STD` + `E-MON` + `F-NORM-CANON` + `F-DEDUP` + `F-VAL`
 
 ## Contrato
-- **Endpoint**: `https://api.acleddata.com/acled/read` — parámetros en `E-SOURCES §2.2`
+- **Endpoint**: `https://acleddata.com/api/acled/read` — parámetros en `E-SOURCES §2.2`
 - **Patrón**: Pull batch diario → topic `raw.acled`
 - **⚠️ Lag real**: 7–28 días por región. Implementar backfill para detectar actualizaciones retroactivas.
-- **Auth**: `?key=ACLED_API_KEY&email=ACLED_EMAIL`
+- **Auth**: OAuth2 Resource Owner Password Credentials → `Authorization: Bearer <access_token>`. Variables: `ACLED_USERNAME`, `ACLED_PASSWORD`, `ACLED_ACCESS_TOKEN` (opcional, se obtiene vía OAuth2 si vacío). Ver `E-SOURCES §2.2`.
 - **Licencia**: CC BY-NC 4.0 — solo uso no comercial
 
 ## Deduplicación

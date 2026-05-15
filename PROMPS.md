@@ -140,7 +140,7 @@ El motivo es técnico: la ventana de contexto de la IA se llena, las specs relev
 | **Ingestor USGS** | Polling cada 3 min, retry/backoff, `minmagnitude=4.0`, deduplicación por `properties.ids` |
 | **Ingestor FIRMS** | Polling con retry/backoff, bbox dinámico por AOI, tipo 0/1 (excluye type 2/3), deduplicación SHA-256 |
 | **Ingestor GDELT** | API GDELT Cloud v2 (gdeltcloud.com/api/v2), ventana 5 min (max 29 días), Bearer auth, análisis de título para event_type, deduplicación por `globalEventId` |
-| **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicación por `event_id` ⚠️ **Bloqueada** |
+| **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicación por `event_id` |
 | **Normalización** | Mappers para USGS, FIRMS, GDELT, ACLED → `EventCanonicalCreate` |
 | **Validación** | 6 reglas de rechazo, quarantine con código de error |
 | **Deduplicación** | Upsert por `(source, event_id_source)` |
@@ -162,14 +162,14 @@ El motivo es técnico: la ventana de contexto de la IA se llena, las specs relev
 | **Bus de eventos (Kafka/Redis)** | Media | MVP usa llamadas síncronas |
 | **Job de purga/archivado** | Baja | Tabla `incidents_archive` no creada |
 | **`canonical_point` como GEOMETRY** | Media | Actualmente WKT String |
-| **Ingestor ACLED** | Alta | Cuenta bloqueada, reintentar |
+| **Ingestor ACLED** | Alta | Cuenta temporalmente bloqueada por intentos fallidos, reintentar |
 | **Tests pytest** | Alta | Cobertura baja |
 
 ### Scripts disponibles
 
 ```
 scripts/
-├── run_acled.py           # Ingestor ACLED (pendiente: cuenta bloqueada)
+├── run_acled.py           # Ingestor ACLED (OAuth2, espera desbloqueo de cuenta)
 ├── run_clustering.py     # Job de clustering
 ├── run_firms.py           # Ingestor FIRMS
 ├── run_gdelt.py           # Ingestor GDELT Cloud v2
@@ -202,7 +202,7 @@ scripts/
 
 ### Próximos pasos recomendados
 
-1. **Probar ACLED** cuando se desbloquee la cuenta
+1. **Probar ACLED** cuando se desbloquee la cuenta (credenciales correctas en `.env`, endpoint migrado a `acleddata.com/api/acled/read`)
 2. **Añadir tests pytest** para ingestores y normalizadores
 3. **Implementar JWT auth** para la API
 4. **Crear job de purga** para incidentes archivados

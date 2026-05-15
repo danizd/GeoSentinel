@@ -6,8 +6,8 @@ import { IncidentMap } from '../components/map/IncidentMap'
 import { IncidentList } from '../components/panels/IncidentList'
 import { IncidentDetail } from '../components/panels/IncidentDetail'
 import { RefreshPanel } from '../components/panels/RefreshPanel'
-import { AlertTriangle, Activity, Database, ChevronDown, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
+import { AlertTriangle, Activity, Database, ChevronDown, RefreshCw, List, X, Menu } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 const ACTIVE_SOURCES = [
   { name: 'USGS', label: 'USGS', desc: 'Terremotos >= 4.0M' },
@@ -22,11 +22,22 @@ const PENDING_SOURCES = [
   { name: 'LUM', label: 'Liveuamap', desc: 'Conflictos geolocalizados (sin API)' },
 ]
 
+const LAYER_BUTTONS = [
+  { key: 'scatter' as const, label: 'PUNTOS' },
+  { key: 'heat' as const, label: 'CALOR' },
+  { key: 'aoi' as const, label: 'ZONAS' },
+  { key: 'tracks' as const, label: 'VUELOS' },
+  { key: 'vessels' as const, label: 'BUQUES' },
+  { key: 'bases' as const, label: 'BASES' },
+]
+
 export function Dashboard() {
   const { filters } = useFilterStore()
-  const { selectedIncident, layers, toggleLayer } = useMapStore()
+  const { selectedIncident, layers, toggleLayer, setSelectedIncident } = useMapStore()
   const [showSources, setShowSources] = useState(false)
+  const [showLayers, setShowLayers] = useState(false)
   const [showRefresh, setShowRefresh] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
 
   const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['incidents', filters],
@@ -35,95 +46,115 @@ export function Dashboard() {
     staleTime: 15000,
   })
 
+  useEffect(() => {
+    if (selectedIncident) {
+      setShowSidebar(false)
+    }
+  }, [selectedIncident])
+
   return (
     <div className="flex flex-col h-screen bg-bg-base text-text-primary">
-      <div className="flex items-center justify-between px-4 py-2 bg-bg-panel border-b border-border-glow">
+      <div className="flex items-center justify-between px-3 py-2 bg-bg-panel border-b border-border-glow">
         <div className="flex items-center gap-2">
+          <button
+            className="md:hidden p-1 rounded hover:bg-bg-glass"
+            onClick={() => setShowSidebar(!showSidebar)}
+          >
+            <List size={20} />
+          </button>
           <Activity className="text-accent-blue" size={20} />
-          <span className="font-mono text-lg font-bold tracking-wider">GeoSentinel</span>
+          <span className="font-mono text-lg font-bold tracking-wider hidden sm:inline">GeoSentinel</span>
+          <span className="font-mono text-lg font-bold tracking-wider sm:hidden">GS</span>
         </div>
+
         <Link
           to="/info"
           className="text-xs text-white hover:text-white transition-colors font-medium"
         >
-          INFORMACIÓN
+          INFO
         </Link>
-        <div className="flex items-center gap-4">
-          <div className="flex gap-1">
-            <button
-              onClick={() => toggleLayer('scatter')}
-              className={`px-2 py-1 text-xs font-mono rounded border ${
-                layers.scatter ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
-              }`}
-            >
-              PUNTOS
-            </button>
-            <button
-              onClick={() => toggleLayer('heat')}
-              className={`px-2 py-1 text-xs font-mono rounded border ${
-                layers.heat ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
-              }`}
-            >
-              CALOR
-            </button>
-            <button
-              onClick={() => toggleLayer('aoi')}
-              className={`px-2 py-1 text-xs font-mono rounded border ${
-                layers.aoi ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
-              }`}
-            >
-              ZONAS
-            </button>
-            <button
-              onClick={() => toggleLayer('tracks')}
-              className={`px-2 py-1 text-xs font-mono rounded border ${
-                layers.tracks ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
-              }`}
-            >
-              VUELOS
-            </button>
-            <button
-              onClick={() => toggleLayer('vessels')}
-              className={`px-2 py-1 text-xs font-mono rounded border ${
-                layers.vessels ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
-              }`}
-            >
-              BUQUES
-            </button>
-            <button
-              onClick={() => toggleLayer('bases')}
-              className={`px-2 py-1 text-xs font-mono rounded border ${
-                layers.bases ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
-              }`}
-            >
-              BASES
-            </button>
+
+        <div className="flex items-center gap-2 md:gap-4">
+          <div className="hidden lg:flex gap-1">
+            {LAYER_BUTTONS.map((btn) => (
+              <button
+                key={btn.key}
+                onClick={() => toggleLayer(btn.key)}
+                className={`px-2 py-1 text-xs font-mono rounded border ${
+                  layers[btn.key] ? 'bg-accent-blue text-bg-base' : 'border-border-glow text-text-secondary'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
           </div>
+
+          <div className="lg:hidden relative">
+            <button
+              onClick={() => setShowLayers(!showLayers)}
+              className={`px-2 py-1 text-xs font-mono rounded border ${
+                showLayers ? 'bg-accent-blue text-bg-base border-accent-blue' : 'border-border-glow text-text-secondary'
+              }`}
+            >
+              CAPAS {Object.values(layers).filter(Boolean).length}
+            </button>
+            {showLayers && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowLayers(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-bg-panel border border-border-glow rounded shadow-lg p-2 z-50 flex flex-col gap-1">
+                  {LAYER_BUTTONS.map((btn) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => { toggleLayer(btn.key); setShowLayers(false) }}
+                      className={`px-3 py-1.5 text-xs font-mono rounded border text-left ${
+                        layers[btn.key] ? 'bg-accent-blue text-bg-base border-accent-blue' : 'border-border-glow text-text-secondary'
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           {isFetching && (
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
+            <div className="flex items-center gap-1 text-xs text-text-secondary">
               <div className="animate-spin h-3 w-3 border border-accent-blue border-t-transparent rounded-full" />
-              <span className="font-mono">
+              <span className="font-mono hidden sm:inline">
                 UPDATED → {dataUpdatedAt ? 'hace ' + Math.floor((Date.now() - dataUpdatedAt) / 1000) + 's' : ''}
               </span>
             </div>
           )}
+
           <button
             onClick={() => setShowRefresh(!showRefresh)}
-            className="text-text-secondary hover:text-accent-blue transition-colors"
-            title="Data Sync"
+            className="flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 bg-accent-blue/10 text-accent-blue border border-accent-blue/20 rounded-lg hover:bg-accent-blue hover:text-white transition-all duration-300 shadow-sm active:scale-95"
+            title="Sincroniza datos"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className={showRefresh ? "animate-spin" : ""} />
+            <span className="font-medium text-xs md:text-sm hidden sm:inline">Sincronizar</span>
           </button>
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {showRefresh && (
-          <div className="shrink-0">
-            <RefreshPanel />
-          </div>
+          <>
+            <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setShowRefresh(false)} />
+            <div className="absolute left-0 top-0 bottom-0 z-40 md:relative refresh-overlay
+              w-full max-w-80 md:w-80 md:shrink-0 md:border-r md:border-border-glow">
+              <div className="flex md:hidden justify-end p-2">
+                <button onClick={() => setShowRefresh(false)} className="text-text-secondary hover:text-text-primary">
+                  <X size={20} />
+                </button>
+              </div>
+              <RefreshPanel />
+            </div>
+          </>
         )}
-        <div className="w-[25%] min-w-[200px] border-r border-border-glow">
+
+        <div className="hidden md:block w-[25%] min-w-[200px] lg:min-w-[260px] border-r border-border-glow">
           <IncidentList
             incidents={data?.incidents || []}
             total={data?.total || 0}
@@ -132,24 +163,60 @@ export function Dashboard() {
           />
         </div>
 
+        {showSidebar && (
+          <>
+            <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setShowSidebar(false)} />
+            <div className="absolute left-0 top-0 bottom-0 z-40 w-[85vw] max-w-[320px] bg-bg-panel sidebar-drawer open md:hidden">
+              <div className="flex justify-between items-center p-3 border-b border-border-glow">
+                <span className="font-mono text-sm text-accent-blue font-bold">INCIDENTES</span>
+                <button onClick={() => setShowSidebar(false)} className="text-text-secondary hover:text-text-primary">
+                  <X size={20} />
+                </button>
+              </div>
+              <IncidentList
+                incidents={data?.incidents || []}
+                total={data?.total || 0}
+                page={data?.page || 1}
+                isLoading={isLoading}
+              />
+            </div>
+          </>
+        )}
+
         <div className="flex-1 relative">
           <IncidentMap
             incidents={data?.incidents || []}
           />
+          {!showSidebar && !selectedIncident && (
+            <div className="md:hidden absolute bottom-4 left-4 z-20">
+              <button
+                onClick={() => setShowSidebar(true)}
+                className="bg-bg-panel border border-border-glow rounded-lg px-3 py-2 text-xs font-mono text-text-primary hover:bg-bg-glass transition-colors shadow-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <List size={16} />
+                  <span>{data?.total || 0} incidentes</span>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
 
         {selectedIncident && (
-          <div className="w-[350px]">
-            <IncidentDetail incident={selectedIncident} />
-          </div>
+          <>
+            <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setSelectedIncident(null)} />
+            <div className="fixed right-0 top-0 bottom-0 z-40 w-[90vw] max-w-[400px] lg:relative lg:max-w-none lg:w-[350px] detail-overlay">
+              <IncidentDetail incident={selectedIncident} />
+            </div>
+          </>
         )}
       </div>
 
-      <div className="flex items-center justify-between px-4 py-1 bg-bg-panel border-t border-border-glow text-xs font-mono text-text-secondary">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between px-3 md:px-4 py-1 bg-bg-panel border-t border-border-glow text-xs font-mono text-text-secondary">
+        <div className="flex items-center gap-3 md:gap-4">
           <div className="flex items-center gap-2">
             <AlertTriangle size={12} className="text-accent-amber" />
-            <span>Sin novedades</span>
+            <span className="hidden sm:inline">Sin novedades</span>
           </div>
           <div className="relative">
             <button
@@ -157,33 +224,37 @@ export function Dashboard() {
               className="flex items-center gap-1 hover:text-text-primary transition-colors"
             >
               <Database size={12} />
-              <span>{ACTIVE_SOURCES.length} fuentes activas</span>
+              <span className="hidden sm:inline">{ACTIVE_SOURCES.length} fuentes</span>
+              <span className="sm:hidden">{ACTIVE_SOURCES.length}F</span>
               <ChevronDown size={10} className={`transition-transform ${showSources ? 'rotate-180' : ''}`} />
             </button>
             {showSources && (
-              <div className="absolute bottom-full left-0 mb-1 w-64 bg-bg-panel border border-border-glow rounded shadow-lg p-2 z-50">
-                <div className="text-xs font-bold text-accent-blue mb-1">ACTIVAS</div>
-                {ACTIVE_SOURCES.map(s => (
-                  <div key={s.name} className="flex items-center gap-2 py-0.5">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-text-primary font-semibold text-[11px]">{s.label}</span>
-                    <span className="text-text-secondary text-[10px]">{s.desc}</span>
-                  </div>
-                ))}
-                <div className="text-xs font-bold text-text-secondary mt-2 mb-1">PENDIENTES</div>
-                {PENDING_SOURCES.map(s => (
-                  <div key={s.name} className="flex items-center gap-2 py-0.5">
-                    <span className="w-2 h-2 rounded-full bg-gray-600" />
-                    <span className="text-text-secondary font-semibold text-[11px]">{s.label}</span>
-                    <span className="text-text-secondary text-[10px]">{s.desc}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSources(false)} />
+                <div className="absolute bottom-full left-0 mb-1 w-56 sm:w-64 bg-bg-panel border border-border-glow rounded shadow-lg p-2 z-50">
+                  <div className="text-xs font-bold text-accent-blue mb-1">ACTIVAS</div>
+                  {ACTIVE_SOURCES.map(s => (
+                    <div key={s.name} className="flex items-center gap-2 py-0.5">
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="text-text-primary font-semibold text-[11px]">{s.label}</span>
+                      <span className="text-text-secondary text-[10px]">{s.desc}</span>
+                    </div>
+                  ))}
+                  <div className="text-xs font-bold text-text-secondary mt-2 mb-1">PENDIENTES</div>
+                  {PENDING_SOURCES.map(s => (
+                    <div key={s.name} className="flex items-center gap-2 py-0.5">
+                      <span className="w-2 h-2 rounded-full bg-gray-600" />
+                      <span className="text-text-secondary font-semibold text-[11px]">{s.label}</span>
+                      <span className="text-text-secondary text-[10px]">{s.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
         <div>
-          {data?.total || 0} incidentes activos
+          {data?.total || 0} incidentes
         </div>
       </div>
     </div>

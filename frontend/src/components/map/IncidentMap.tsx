@@ -775,7 +775,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       <PulseOverlay incidents={incidents} mapRef={mapRef} />
 
       {selectedFlight && (
-        <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-56 z-50 max-h-[70vh] overflow-y-auto">
+        <div className="absolute bottom-4 right-4 left-4 sm:left-auto sm:w-56 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs z-50 max-h-[70vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getMilitaryColor(selectedFlight.operatorCountry) }} />
@@ -831,7 +831,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       )}
 
       {selectedVessel && (
-        <div className="absolute bottom-4 left-4 bg-bg-panel border border-accent-amber rounded-lg p-3 shadow-xl font-mono text-xs w-56 z-50 max-h-[70vh] overflow-y-auto">
+        <div className="absolute bottom-4 left-4 right-4 sm:right-auto sm:w-56 bg-bg-panel border border-accent-amber rounded-lg p-3 shadow-xl font-mono text-xs z-50 max-h-[70vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getVesselColor(selectedVessel.flag) }} />
@@ -872,7 +872,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       )}
 
       {selectedIncident && (
-        <div className="absolute bottom-4 right-4 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs w-60 z-50 max-h-[70vh] overflow-y-auto">
+        <div className="absolute bottom-4 right-4 left-4 sm:left-auto sm:w-60 bg-bg-panel border border-accent-blue rounded-lg p-3 shadow-xl font-mono text-xs z-50 max-h-[70vh] overflow-y-auto md:hidden">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: `rgb(${getIncidentColor(selectedIncident.event_type, selectedIncident.category).join(',')})` }} />
@@ -939,8 +939,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
 
       <button
         onClick={() => setIs3D(!is3D)}
-        className="absolute top-18
-         right-2 bg-accent-blue text-white px-3 py-2 text-sm font-bold rounded shadow-lg hover:bg-accent-blue/80 transition-colors"
+        className="absolute top-16 sm:top-18 right-2 bg-accent-blue text-white px-2 sm:px-3 py-2 text-xs sm:text-sm font-bold rounded shadow-lg hover:bg-accent-blue/80 transition-colors"
       >
         {is3D ? '2D' : '3D'}
       </button>
@@ -957,7 +956,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 font-mono text-xs text-text-secondary bg-bg-glass px-2 py-1 rounded">
+      <div className="absolute bottom-4 left-4 font-mono text-[10px] sm:text-xs text-text-secondary bg-bg-glass px-2 py-1 rounded">
         {displayViewport.latitude.toFixed(4)}&deg; {displayViewport.longitude.toFixed(4)}&deg; &middot; ZOOM {displayViewport.zoom.toFixed(1)}
       </div>
     </div>

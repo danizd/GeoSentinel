@@ -14,8 +14,8 @@ from backend.validation.validator import insert_quarantine, validate_event
 
 logger = logging.getLogger(__name__)
 
-ACLED_API_URL = "https://api.acleddata.com/acled/read"
-ACLED_TOKEN_URL = "https://acleddata.com/oauth/token"
+ACLED_API_URL = os.getenv("ACLED_API_URL", "https://acleddata.com/api/acled/read")
+ACLED_TOKEN_URL = os.getenv("ACLED_TOKEN_URL", "https://acleddata.com/oauth/token")
 POLL_INTERVAL_SECONDS = 86400
 ACLED_PAGE_SIZE = 500
 TOKEN_CACHE_FILE = ".acled_token_cache"
@@ -77,7 +77,9 @@ class ACLEDIngestor:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
         response = self.session.post(ACLED_TOKEN_URL, data=data, headers=headers, timeout=60)
-        response.raise_for_status()
+        if not response.ok:
+            logger.error(f"ACLED OAuth2 failed {response.status_code}: {response.text[:500]}")
+            response.raise_for_status()
         token_data = response.json()
         access_token = token_data.get("access_token")
         if not access_token:
@@ -99,7 +101,7 @@ class ACLEDIngestor:
         }
 
     def _get_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.access_token}"}
+        return {"Authorization": f"Bearer {self.access_token}", "Accept": "application/json"}
 
     def fetch_page(self, since_date: datetime, page: int) -> list[dict[str, Any]]:
         params = self._build_params(since_date, page)

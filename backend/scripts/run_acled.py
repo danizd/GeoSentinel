@@ -19,18 +19,23 @@ if not db_url:
 engine = create_engine(db_url)
 Session = sessionmaker(bind=engine)
 
-api_key = os.getenv("ACLED_API_KEY")
-api_email = os.getenv("ACLED_EMAIL")
+access_token = os.getenv("ACLED_ACCESS_TOKEN") or None
+username = os.getenv("ACLED_USERNAME") or None
+password = os.getenv("ACLED_PASSWORD") or None
 
-if not api_key or not api_email:
-    print("ERROR: ACLED_API_KEY o ACLED_EMAIL no estan definidas.")
+if not access_token and (not username or not password):
+    print("ERROR: ACLED_ACCESS_TOKEN o ACLED_USERNAME/ACLED_PASSWORD no estan definidas.")
     print("  Obtener en: https://acleddata.com/myacled")
     sys.exit(1)
 
 from backend.ingestors.acled_ingestor import ACLEDIngestor
 
 def main():
-    ingestor = ACLEDIngestor(api_key=api_key, api_email=api_email)
+    ingestor = ACLEDIngestor(
+        access_token=access_token,
+        username=username,
+        password=password,
+    )
     session = Session()
 
     try:

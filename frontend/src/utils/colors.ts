@@ -88,6 +88,26 @@ export function getIncidentColor(eventType: string, category: string): [number, 
   return EVENT_TYPE_COLORS[eventType] || CATEGORY_RGB[category] || [56, 189, 248]
 }
 
+const SEVERITY_COLORS: [number, number, number][] = [
+  [34, 197, 94],
+  [34, 197, 94],
+  [132, 204, 22],
+  [132, 204, 22],
+  [234, 179, 8],
+  [234, 179, 8],
+  [249, 115, 22],
+  [249, 115, 22],
+  [239, 68, 68],
+  [239, 68, 68],
+  [185, 28, 28],
+]
+
+export function getSeverityColor(severity: number): string {
+  const idx = Math.min(Math.floor(severity), 10)
+  const [r, g, b] = SEVERITY_COLORS[idx]
+  return `rgb(${r},${g},${b})`
+}
+
 export function getHeadline(incident: {
   raw_payload?: { title?: string; [key: string]: unknown } | null
   event_type: string
