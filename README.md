@@ -176,23 +176,26 @@ Todos los servicios se conectan a un PostgreSQL existente (contenedor `postgres`
 docker exec -it postgres psql -U admin -c "CREATE DATABASE geosentinel;"
 
 # 2. Construir y levantar todos los servicios
-docker compose -f docker-compose.prod.yml up -d --build
+VITE_MAPBOX_TOKEN=pk.xxx docker compose -f docker-compose.prod.yml up -d --build
 
 # 3. Ejecutar migraciones
 docker exec -it geosentinel-backend alembic upgrade head
 
 # 4. Seed de datos iniciales
-docker exec -it geosentinel-backend python -c "from backend.api.routes.seed import seed; ..."
+docker exec -it geosentinel-backend python -c "from backend.api.database import engine; from backend.api.routes.seed import seed; from sqlalchemy.orm import Session; from sqlalchemy import text; engine.execute(text('CREATE EXTENSION IF NOT EXISTS postgis')); session = Session(engine); seed(session)"
 
-# 5. Verificar salud
-curl http://localhost:8000/v1/health
+# 5. Verificar
+docker exec geosentinel-backend python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/v1/health').read().decode())"
+docker exec geosentinel-frontend wget -qO- http://localhost/ | head -1
 ```
 
 ### Nginx Proxy Manager
 
 Crear un Proxy Host en NPM:
 - **Domain**: `geosentinel.movilab.es`
-- **Forward to**: `http://geosentinel-frontend:80`
+- **Scheme**: `http`
+- **Forward Hostname/IP**: `172.17.0.1` (Docker bridge gateway)
+- **Forward Port**: `9090`
 - **SSL**: Enable, Force SSL, HTTP/2
 - No hace falta Custom Locations porque el frontend nginx ya hace proxy de `/v1/` al backend
 

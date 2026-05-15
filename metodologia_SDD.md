@@ -1,6 +1,8 @@
 # Sistema de Desarrollo por Especificaciones (SDD)
 ## Metodología aplicada en GEO SENTINEL
-### NOTA IMPORTANTE: Esta metodología esta en revisión y es susceptible de ajustes y mejoras a todos los niveles
+### NOTA IMPORTANTE: Esta metodología esta en revisión y es susceptible de ajustes y mejoras a todos los niveles.
+Se debe revisar la implementación mediante Harness Engineering  (quién actúa, en qué orden, cómo se valida) y Backpressure (revisiones precommit)
+
 ---
 
 ## 1. Visión general
