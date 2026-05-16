@@ -18,7 +18,14 @@ function getInitialScopes(): string[] {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed
     } catch { /* ignore */ }
   }
-  return import.meta.env.DEV ? DEV_SCOPES : []
+  const envScopes = import.meta.env.VITE_DEFAULT_SCOPES
+  if (envScopes) {
+    try {
+      const parsed = JSON.parse(envScopes)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    } catch { /* ignore */ }
+  }
+  return import.meta.env.DEV ? DEV_SCOPES : DEV_SCOPES
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({

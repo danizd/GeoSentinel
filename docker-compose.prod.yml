@@ -51,6 +51,7 @@ services:
       dockerfile: docker/Dockerfile.frontend
       args:
         - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
+        - VITE_DEFAULT_SCOPES=${VITE_DEFAULT_SCOPES}
     container_name: geosentinel-frontend
     restart: unless-stopped
     ports:
