@@ -223,6 +223,9 @@ async def run_lifecycle(background_tasks: BackgroundTasks):
 
     job_id, record = _create_job_record("lifecycle")
 
+    async with _JOBS_LOCK:
+        JOBS[job_id] = record
+
     background_tasks.add_task(_background_job, job_id, "lifecycle", _run_lifecycle_job)
 
     return JobResponse(
@@ -338,6 +341,9 @@ async def run_single_job(source: str, background_tasks: BackgroundTasks):
             )
 
     job_id, record = _create_job_record(source)
+
+    async with _JOBS_LOCK:
+        JOBS[job_id] = record
 
     async def task():
         return await _run_script(SCRIPTS[source])
