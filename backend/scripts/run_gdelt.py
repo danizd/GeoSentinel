@@ -36,7 +36,7 @@ def main():
         print("GDELT Cloud — Zonas de conflicto")
         print("=" * 60)
 
-        result = ingestor.run_all_zones(session, lookback_days=1)
+        result = ingestor.run_all_zones(session, lookback_days=1, timeout_seconds=240)
 
         print("\n  processed:     {0}".format(result.get('processed', 0)))
         print("  quarantined:   {0}".format(result.get('quarantined', 0)))

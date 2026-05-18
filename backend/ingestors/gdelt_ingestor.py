@@ -1,5 +1,6 @@
 import logging
 import os
+import signal
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -126,7 +127,7 @@ class GDELTCloudIngestor:
                 f"{GDELT_BASE_URL}/events",
                 params=params,
                 headers=headers,
-                timeout=30,
+                timeout=15,
             )
             response.raise_for_status()
             data = response.json()
@@ -244,85 +245,114 @@ class GDELTCloudIngestor:
             "total_fetched": len(events),
         }
 
-    def run_all_zones(self, db_session, process_callback=None, lookback_days: int = 1) -> dict[str, Any]:
-        end_time = datetime.now(timezone.utc)
+    def run_all_zones(self, db_session, process_callback=None, lookback_days: int = 1, timeout_seconds: int = 240) -> dict[str, Any]:
+        """Ejecuta ingesta para todas las zonas de conflicto con timeout global.
+        
+        Args:
+            db_session: Sesión de base de datos
+            process_callback: Callback opcional para procesar eventos
+            lookback_days: Días de lookback para la consulta
+            timeout_seconds: Timeout global en segundos (default 240s)
+        
+        Raises:
+            TimeoutError: Si la ejecución excede el timeout global
+        """
+        class TimeoutError(Exception):
+            pass
 
-        total_processed = 0
-        total_quarantined = 0
-        total_duplicates = 0
-        total_fetched = 0
+        def timeout_handler(signum, frame):
+            raise TimeoutError(f"run_all_zones excedió el timeout de {timeout_seconds}s")
 
-        callback = process_callback or process_and_upsert_event
+        # Configurar signal para timeout (solo Unix)
+        original_handler = None
+        if hasattr(signal, 'SIGALRM'):
+            original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout_seconds)
 
-        for country in CONFLICT_ZONES:
-            events = []
-            attempt = 0
+        try:
+            end_time = datetime.now(timezone.utc)
 
-            while attempt < self.max_retries and not events:
-                try:
-                    start_time = end_time - timedelta(days=lookback_days)
-                    events = self.fetch_events(
-                        start_time, end_time,
-                        country=country,
-                        has_fatalities=True,
-                        limit=100,
-                    )
-                    break
-                except requests.exceptions.HTTPError as e:
-                    attempt += 1
-                    if attempt >= self.max_retries:
-                        logger.error(f"Max retries for {country}: {e}")
-                        break
-                    time.sleep(self._calculate_backoff(attempt))
-                except Exception as e:
-                    attempt += 1
-                    if attempt >= self.max_retries:
-                        logger.error(f"Max retries for {country}: {e}")
-                        break
-                    time.sleep(self._calculate_backoff(attempt))
+            total_processed = 0
+            total_quarantined = 0
+            total_duplicates = 0
+            total_fetched = 0
 
-            zone_processed = 0
-            zone_quarantined = 0
-            zone_duplicates = 0
+            callback = process_callback or process_and_upsert_event
 
-            for raw_event in events:
-                try:
-                    event = normalize_gdelt_event(raw_event)
-                    validation = validate_event(event)
+            for country in CONFLICT_ZONES:
+                events = []
+                attempt = 0
 
-                    if not validation.is_valid:
-                        insert_quarantine(
-                            session=db_session,
-                            source="gdelt",
-                            raw_payload=raw_event,
-                            rejection_code=validation.rejection_code,
-                            rejection_detail=validation.rejection_detail,
+                while attempt < self.max_retries and not events:
+                    try:
+                        start_time = end_time - timedelta(days=lookback_days)
+                        events = self.fetch_events(
+                            start_time, end_time,
+                            country=country,
+                            has_fatalities=True,
+                            limit=100,
                         )
+                        break
+                    except requests.exceptions.HTTPError as e:
+                        attempt += 1
+                        if attempt >= self.max_retries:
+                            logger.error(f"Max retries for {country}: {e}")
+                            break
+                        time.sleep(self._calculate_backoff(attempt))
+                    except Exception as e:
+                        attempt += 1
+                        if attempt >= self.max_retries:
+                            logger.error(f"Max retries for {country}: {e}")
+                            break
+                        time.sleep(self._calculate_backoff(attempt))
+
+                zone_processed = 0
+                zone_quarantined = 0
+                zone_duplicates = 0
+
+                for raw_event in events:
+                    try:
+                        event = normalize_gdelt_event(raw_event)
+                        validation = validate_event(event)
+
+                        if not validation.is_valid:
+                            insert_quarantine(
+                                session=db_session,
+                                source="gdelt",
+                                raw_payload=raw_event,
+                                rejection_code=validation.rejection_code,
+                                rejection_detail=validation.rejection_detail,
+                            )
+                            zone_quarantined += 1
+                            continue
+
+                        result = callback(db_session, event)
+                        if result.get("duplicate"):
+                            zone_duplicates += 1
+                        else:
+                            zone_processed += 1
+
+                    except Exception as e:
+                        logger.error(f"Error processing GDELT event in {country}: {e}")
                         zone_quarantined += 1
-                        continue
 
-                    result = callback(db_session, event)
-                    if result.get("duplicate"):
-                        zone_duplicates += 1
-                    else:
-                        zone_processed += 1
+                logger.info(f"{country}: {zone_processed} processed, {zone_duplicates} duplicates")
+                total_processed += zone_processed
+                total_quarantined += zone_quarantined
+                total_duplicates += zone_duplicates
+                total_fetched += len(events)
 
-                except Exception as e:
-                    logger.error(f"Error processing GDELT event in {country}: {e}")
-                    zone_quarantined += 1
-
-            logger.info(f"{country}: {zone_processed} processed, {zone_duplicates} duplicates")
-            total_processed += zone_processed
-            total_quarantined += zone_quarantined
-            total_duplicates += zone_duplicates
-            total_fetched += len(events)
-
-        return {
-            "processed": total_processed,
-            "quarantined": total_quarantined,
-            "duplicates": total_duplicates,
-            "total_fetched": total_fetched,
-        }
+            return {
+                "processed": total_processed,
+                "quarantined": total_quarantined,
+                "duplicates": total_duplicates,
+                "total_fetched": total_fetched,
+            }
+        finally:
+            # Restaurar signal handler original y desactivar alarm
+            if hasattr(signal, 'SIGALRM') and original_handler is not None:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, original_handler)
 
 
 def run_polling():
