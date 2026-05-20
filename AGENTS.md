@@ -103,6 +103,7 @@ Si falta información en las specs → señalarlo. **No inventar.**
 | Gestión de AOI en UI | `E-ARCH-FRONT` + `F-UI-AOI` + `F-API-AOI` + `F-UI-MAP` |
 | Setup inicial del proyecto | `E-ARCH-FRONT` + `E-STD` |
 | Botones de refresh | `E-ARCH` + `E-ARCH-FRONT` + `E-SEC` + `F-UI-REFRESH` + `F-UI-AUTH` |
+| Puntos de incidentes se ven a través del globo 3D (antípodas) | `documentacion/lecciones_aprendidas/L-CORR-001-antipodas-globo-3d.md` |
 ---
 
 ## Decisiones de diseño (no reabrir sin revisión explícita)

@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import Map, { NavigationControl, Source, Layer, type MapRef } from 'react-map-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useMapStore } from '../../stores/mapStore'
 import { useQuery } from '@tanstack/react-query'
@@ -158,46 +159,45 @@ function AircraftIconManager({ flights }: { flights: MilitaryFlight[] }) {
   if (!geojson) return null
 
   return (
-    <Source id="military-flights-src" type="geojson" data={geojson}>
+<Source id="military-flights-src" type="geojson" data={geojson}>
       <Layer
-        id="military-flights-halo-dark"
+        id="military-flights-halo"
         type="circle"
         source="military-flights-src"
         paint={{
-          'circle-radius': 14,
-          'circle-color': '#000000',
-          'circle-opacity': 0.35,
-          'circle-stroke-width': 0,
-        }}
-      />
-      <Layer
-        id="military-flights-halo-light"
-        type="circle"
-        source="military-flights-src"
-        paint={{
-          'circle-radius': 10,
+          'circle-radius': 12,
           'circle-color': '#FFFFFF',
-          'circle-opacity': 0.6,
+          'circle-opacity': 0.5,
           'circle-stroke-width': 0,
         }}
       />
-      <Layer
-        id="military-flights-symbol"
-        type="symbol"
-        source="military-flights-src"
-        layout={{
-          'icon-image': 'airplane-icon',
-          'icon-size': 0.45,
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-          'icon-rotate': ['get', 'heading'],
-          'icon-rotation-alignment': 'map',
-        }}
-        paint={{
-          'icon-color': ['get', 'color'],
-          'icon-opacity': 0.95,
-        }}
-      />
+		{/* Halo exterior coloreado */}
+		<Layer
+		  id="military-flights-halo-outer"
+		  type="circle"
+		  source="military-flights-src"
+		  paint={{
+			'circle-radius': 18,
+			'circle-color': ['get', 'color'],
+			'circle-opacity': 0.12,
+			'circle-stroke-width': 0,
+			'circle-blur': 1,
+		  }}
+		/>
+		{/* Anillo interior */}
+		<Layer
+		  id="military-flights-halo-ring"
+		  type="circle"
+		  source="military-flights-src"
+		  paint={{
+			'circle-radius': 11,
+			'circle-color': 'transparent',
+			'circle-opacity': 0,
+			'circle-stroke-width': 1.5,
+			'circle-stroke-color': ['get', 'color'],
+			'circle-stroke-opacity': 0.7,
+		  }}
+		/>
     </Source>
   )
 }
@@ -208,13 +208,8 @@ function MilitaryTrailsLayer({ flights }: { flights: MilitaryFlight[] }) {
       .filter(f => f.trail && f.trail.length > 1)
       .map(f => ({
         type: 'Feature' as const,
-        properties: {
-          color: getMilitaryColor(f.operatorCountry),
-        },
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: f.trail!,
-        },
+        properties: { color: getMilitaryColor(f.operatorCountry) },
+        geometry: { type: 'LineString' as const, coordinates: f.trail! },
       }))
     if (!features.length) return null
     return { type: 'FeatureCollection' as const, features }
@@ -224,14 +219,39 @@ function MilitaryTrailsLayer({ flights }: { flights: MilitaryFlight[] }) {
 
   return (
     <Source id="military-trails-src" type="geojson" data={geojson}>
+      {/* Capa exterior: halo difuso */}
+      <Layer
+        id="military-trails-glow-outer"
+        type="line"
+        source="military-trails-src"
+        paint={{
+          'line-color': ['get', 'color'],
+          'line-width': 12,
+          'line-opacity': 0.12,
+          'line-blur': 6,
+        }}
+      />
+      {/* Capa media: brillo */}
+      <Layer
+        id="military-trails-glow-mid"
+        type="line"
+        source="military-trails-src"
+        paint={{
+          'line-color': ['get', 'color'],
+          'line-width': 5,
+          'line-opacity': 0.35,
+          'line-blur': 2,
+        }}
+      />
+      {/* Línea central: nítida */}
       <Layer
         id="military-trails-line"
         type="line"
         source="military-trails-src"
         paint={{
           'line-color': ['get', 'color'],
-          'line-width': 3,
-          'line-opacity': 0.8,
+          'line-width': 1.5,
+          'line-opacity': 0.95,
         }}
       />
     </Source>
@@ -293,11 +313,17 @@ function IncidentTooltip({ hover, incidents }: { hover: { x: number; y: number; 
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.15 }}
       className="panel-glass absolute z-50 p-3 font-mono text-xs pointer-events-none shadow-xl"
-      style={{
-        left: hover.x + 16,
-        top: hover.y - 10,
-        maxWidth: 280,
-      }}
+	  style={{
+		left: hover.x + 16,
+		top: hover.y - 10,
+		maxWidth: 280,
+		background: 'rgba(5, 10, 18, 0.92)',
+		border: `1px solid ${`rgb(${color.join(',')})`}55`,
+		borderLeft: `3px solid rgb(${color.join(',')})`,
+		borderRadius: 6,
+		backdropFilter: 'blur(12px)',
+		boxShadow: `0 0 20px rgba(${color.join(',')}, 0.2), 0 4px 24px rgba(0,0,0,0.6)`,
+	  }}
     >
       <div className="flex items-center gap-2 mb-1.5">
         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: `rgb(${color.join(',')})` }} />
@@ -362,21 +388,38 @@ function PulseOverlay({ incidents, mapRef }: { incidents: Incident[]; mapRef: Re
   return (
     <AnimatePresence>
       {pixelPositions.map((p) => (
-        <motion.div
-          key={p.id}
-          initial={{ opacity: 0, scale: 0 }}
-          animate={{ opacity: 0, scale: 2.5 }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut', repeatDelay: 0 }}
-          className="absolute pointer-events-none rounded-full"
-          style={{
-            left: p.x - 12,
-            top: p.y - 12,
-            width: 24,
-            height: 24,
-            border: `2px solid ${p.color}`,
-            backgroundColor: 'transparent',
-          }}
-        />
+        <div key={p.id} className="absolute pointer-events-none" style={{ left: p.x - 20, top: p.y - 20 }}>
+          {[0, 0.6, 1.2].map((delay) => (
+            <motion.div
+              key={delay}
+              className="absolute rounded-full"
+              style={{
+                width: 40,
+                height: 40,
+                border: `1.5px solid ${p.color}`,
+              }}
+              initial={{ opacity: 0.8, scale: 0.3 }}
+              animate={{ opacity: 0, scale: 2.2 }}
+              transition={{
+                duration: 2.4,
+                repeat: Infinity,
+                ease: 'easeOut',
+                delay,
+              }}
+            />
+          ))}
+          <div
+            className="absolute rounded-full"
+            style={{
+              width: 8,
+              height: 8,
+              left: 16,
+              top: 16,
+              backgroundColor: p.color,
+              boxShadow: `0 0 6px 2px ${p.color}55`,
+            }}
+          />
+        </div>
       ))}
     </AnimatePresence>
   )
@@ -386,6 +429,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
   const mapRef = useRef<MapRef | null>(null)
   const { viewport, layers, selectedIncident } = useMapStore()
   const [is3D, setIs3D] = useState(true)
+  const [globeCenter, setGlobeCenter] = useState({ lon: DEFAULT_VIEWPORT.longitude, lat: DEFAULT_VIEWPORT.latitude })
   const [selectedFlight, setSelectedFlight] = useState<MilitaryFlight | null>(null)
   const [selectedVessel, setSelectedVessel] = useState<AISVessel | null>(null)
   const [hover, setHover] = useState<{ x: number; y: number; incidentId: string } | null>(null)
@@ -454,28 +498,6 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     )
   }, [militaryData])
 
-  const geojsonData = useMemo(() => ({
-    type: 'FeatureCollection' as const,
-    features: incidents
-      .filter(i => i.canonical_point)
-      .map((incident) => ({
-        type: 'Feature' as const,
-        properties: {
-          id: incident.incident_id,
-          category: incident.category,
-          severity: incident.severity_max,
-          status: incident.status,
-          title: incident.raw_payload?.title || incident.event_type,
-          confidence: incident.confidence,
-          sources: incident.sources.join(','),
-        },
-        geometry: {
-          type: 'Point' as const,
-          coordinates: [incident.canonical_point!.lon, incident.canonical_point!.lat],
-        },
-      })),
-  }), [incidents])
-
   const displayViewport = useMemo(() => {
     const vp = isValidViewport(viewport) ? viewport : DEFAULT_VIEWPORT
     return {
@@ -486,6 +508,44 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       bearing: vp.bearing ?? 0,
     }
   }, [viewport])
+
+  const geojsonData = useMemo(() => {
+    const centerLon = globeCenter.lon * Math.PI / 180
+    const centerLat = globeCenter.lat * Math.PI / 180
+    const cx = Math.cos(centerLat) * Math.cos(centerLon)
+    const cy = Math.cos(centerLat) * Math.sin(centerLon)
+    const cz = Math.sin(centerLat)
+
+    return {
+      type: 'FeatureCollection' as const,
+      features: incidents
+        .filter(i => i.canonical_point)
+        .filter(i => {
+          const lon = i.canonical_point!.lon * Math.PI / 180
+          const lat = i.canonical_point!.lat * Math.PI / 180
+          const dot = cx * Math.cos(lat) * Math.cos(lon) +
+                      cy * Math.cos(lat) * Math.sin(lon) +
+                      cz * Math.sin(lat)
+          return dot > -0.1
+        })
+        .map((incident) => ({
+          type: 'Feature' as const,
+          properties: {
+            id: incident.incident_id,
+            category: incident.category,
+            severity: incident.severity_max,
+            status: incident.status,
+            title: incident.raw_payload?.title || incident.event_type,
+            confidence: incident.confidence,
+            sources: incident.sources.join(','),
+          },
+          geometry: {
+            type: 'Point' as const,
+            coordinates: [incident.canonical_point!.lon, incident.canonical_point!.lat],
+          },
+        })),
+    }
+  }, [incidents, globeCenter.lon, globeCenter.lat])
 
   useEffect(() => {
     if (!selectedIncident?.canonical_point) return
@@ -500,6 +560,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         duration: 1800,
         essential: true,
       })
+      setGlobeCenter({ lon: selectedIncident.canonical_point.lon, lat: selectedIncident.canonical_point.lat })
     }
   }, [selectedIncident])
 
@@ -511,6 +572,36 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
 
   const handleMapLoad = useCallback((e: any) => {
     const map = e.target
+    const ICON_SIZE = 128
+
+    const svgToImageData = (svgUrl: string, iconId: string): Promise<void> =>
+      fetch(svgUrl)
+        .then(r => r.text())
+        .then(svg => {
+          const blob = new Blob([svg], { type: 'image/svg+xml' })
+          const objUrl = URL.createObjectURL(blob)
+          const img = new Image(ICON_SIZE, ICON_SIZE)
+          return new Promise<void>((resolve, reject) => {
+            img.onload = () => {
+              const c = document.createElement('canvas')
+              c.width = ICON_SIZE
+              c.height = ICON_SIZE
+              const ctx = c.getContext('2d')!
+              ctx.clearRect(0, 0, ICON_SIZE, ICON_SIZE)
+              ctx.drawImage(img, 0, 0, ICON_SIZE, ICON_SIZE)
+              URL.revokeObjectURL(objUrl)
+              if (!map.hasImage(iconId)) {
+                map.addImage(iconId, ctx.getImageData(0, 0, ICON_SIZE, ICON_SIZE), { sdf: true })
+              }
+              resolve()
+            }
+            img.onerror = () => {
+              URL.revokeObjectURL(objUrl)
+              reject(new Error(`Failed to rasterize ${iconId}`))
+            }
+            img.src = objUrl
+          })
+        })
 
     const icons = [
       { url: '/icons/airplane.svg', id: 'airplane-icon' },
@@ -518,27 +609,25 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       { url: '/icons/shield.svg', id: 'shield-icon' },
     ]
 
-    icons.forEach(({ url, id }) => {
-      if (map.hasImage(id)) return
-      map.loadImage(url, (err: any, img: any) => {
-        if (err) {
-          console.error(`Error loading icon ${id}:`, err)
-          return
-        }
-        if (!map.hasImage(id)) {
-          map.addImage(id, img, { sdf: true })
-        }
-      })
-    })
+    Promise.all(icons.map(({ url, id }) => svgToImageData(url, id))).catch(err =>
+      console.error('Error loading icons:', err),
+    )
+  }, [])
+
+  const handleMoveEnd = useCallback((e: any) => {
+    const map = e.target
+    const center = map.getCenter()
+    setGlobeCenter({ lon: center.lng, lat: center.lat })
   }, [])
 
   const handleMouseMove = useCallback((e: any) => {
     const map = mapRef.current?.getMap()
     if (!map) return
 
-    const features = map.queryRenderedFeatures(e.point, {
-      layers: ['incidents-point'],
-    })
+    const queryLayers = ['incidents-point'].filter(id => map.getLayer(id))
+    const features = queryLayers.length
+      ? map.queryRenderedFeatures(e.point, { layers: queryLayers })
+      : []
 
     if (features.length > 0) {
       const f = features[0]
@@ -614,6 +703,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         ref={mapRef}
         initialViewState={displayViewport}
         onLoad={handleMapLoad}
+        onMoveEnd={handleMoveEnd}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -630,28 +720,40 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
               id="incidents-point"
               type="circle"
               paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'severity'], 0, 4, 10, 20],
-                'circle-color': INCIDENT_CATEGORY_COLORS as any,
-                'circle-opacity': 0.85,
-                'circle-stroke-width': 1,
+                'circle-radius': ['interpolate', ['linear'], ['get', 'severity'], 0, 4, 10, 14],
+                'circle-color': [
+                  'match', ['get', 'category'],
+                  'conflict', '#ef4444',
+                  'wildfire', '#f97316',
+                  'earthquake', '#a855f7',
+                  'disaster_natural', '#06b6d4',
+                  'mobility', '#38bdf8',
+                  'humanitarian', '#fbbf24',
+                  'thermal_anomaly', '#ea580c',
+                  'crime', '#a855f7',
+                  'protest', '#ec4899',
+                  'other', '#64748b',
+                  '#38bdf8',
+                ],
+                'circle-opacity': 0.92,
+                'circle-stroke-width': 1.5,
                 'circle-stroke-color': '#ffffff',
+                'circle-stroke-opacity': 0.6,
               }}
             />
-            {selectedIncident && selectedIncident.canonical_point && (
-              <Layer
-                id="incident-selected"
-                type="circle"
-                filter={['==', ['get', 'id'], selectedIncident.incident_id]}
-                paint={{
-                  'circle-radius': 24,
-                  'circle-color': '#000000',
-                  'circle-opacity': 0,
-                  'circle-stroke-width': 3,
-                  'circle-stroke-color': '#38bdf8',
-                  'circle-stroke-opacity': 1,
-                }}
-              />
-            )}
+            <Layer
+              id="incident-selected"
+              type="circle"
+              filter={selectedIncident ? ['==', ['get', 'id'], selectedIncident.incident_id] : ['==', ['get', 'id'], '']}
+              paint={{
+                'circle-radius': 24,
+                'circle-color': '#000000',
+                'circle-opacity': 0,
+                'circle-stroke-width': 3,
+                'circle-stroke-color': '#38bdf8',
+                'circle-stroke-opacity': 1,
+              }}
+            />
           </Source>
         )}
 
