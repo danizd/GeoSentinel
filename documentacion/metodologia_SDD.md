@@ -46,50 +46,51 @@ proyecto/
 │
 ├── AGENTS.md                          ← punto de entrada obligatorio para la IA
 │
-├── specs_estructurales/               ← reglas globales del sistema
-│   ├── arquitectura.md
-│   ├── arquitectura-frontend.md
-│   ├── modelo-datos.md
-│   ├── fuentes-datos.md
-│   ├── seguridad.md
-│   ├── estandares-codigo.md
-│   ├── infraestructura.md
-│   └── monitorizacion.md
-│
-└── specs_funcionales/                 ← comportamiento concreto por componente
-    ├── ingesta/
-    │   ├── usgs.md
-    │   ├── firms.md
-    │   ├── gdelt.md
-    │   ├── acled.md
-    │   ├── adsb.md
-    │   ├── marinetraffic.md
-    │   ├── aisstream.md
-    │   ├── military-flights.md
-    │   └── liveuamap.md
-    ├── normalizacion/
-    │   ├── modelo-canonico.md
-    │   ├── actores.md
-    │   ├── escala-severidad.md
-    │   └── modelo-confianza.md
-    ├── procesamiento/
-    │   ├── validacion-quarantine.md
-    │   ├── deduplicacion.md
-    │   ├── clustering.md
-    │   ├── ciclo-vida-incidente.md
-    │   └── aoi.md
-    ├── api/
-    │   ├── incidents.md
-    │   ├── aoi.md
-    │   └── corrections.md
-    └── ui/
-        ├── dashboard.md
-        ├── mapa-incidentes.md
-        ├── tiempo-real.md
-        ├── autenticacion-ui.md
-        ├── correcciones-ui.md
-        ├── aoi-ui.md
-        └── refresh-controls.md
+├── documentacion/
+│   ├── specs_estructurales/               ← reglas globales del sistema
+│   │   ├── arquitectura.md
+│   │   ├── arquitectura-frontend.md
+│   │   ├── modelo-datos.md
+│   │   ├── fuentes-datos.md
+│   │   ├── seguridad.md
+│   │   ├── estandares-codigo.md
+│   │   ├── infraestructura.md
+│   │   └── monitorizacion.md
+│   │
+│   └── specs_funcionales/                 ← comportamiento concreto por componente
+│       ├── ingesta/
+│       │   ├── usgs.md
+│       │   ├── firms.md
+│       │   ├── gdelt.md
+│       │   ├── acled.md
+│       │   ├── adsb.md
+│       │   ├── marinetraffic.md
+│       │   ├── aisstream.md
+    │       │   ├── military-flights.md
+│       │   └── liveuamap.md
+│       ├── normalizacion/
+│       │   ├── modelo-canonico.md
+│       │   ├── actores.md
+│       │   ├── escala-severidad.md
+│       │   └── modelo-confianza.md
+│       ├── procesamiento/
+│       │   ├── validacion-quarantine.md
+│       │   ├── deduplicacion.md
+│       │   ├── clustering.md
+│       │   ├── ciclo-vida-incidente.md
+│       │   └── aoi.md
+│       ├── api/
+│       │   ├── incidents.md
+│       │   ├── aoi.md
+│       │   └── corrections.md
+│       └── ui/
+│           ├── dashboard.md
+│           ├── mapa-incidentes.md
+│           ├── tiempo-real.md
+│           ├── autenticacion-ui.md
+│           ├── correcciones-ui.md
+│           ├── aoi-ui.md
+│           └── refresh-controls.md
 ```
 
 ---

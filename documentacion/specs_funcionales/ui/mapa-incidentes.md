@@ -7,16 +7,15 @@
 ```typescript
 // components/map/IncidentMap.tsx
 import Map from 'react-map-gl'
-import DeckGL from '@deck.gl/react'
 
 const MAP_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12'
 const INITIAL_VIEW = { longitude: 20, latitude: 20, zoom: 2.5, pitch: 0, bearing: 0 }
-
-// DeckGL se monta encima de Mapbox como controller
 ```
 
-Mapbox maneja el mapa base. Deck.gl maneja todas las capas de datos.
-**Nunca añadir marcadores DOM encima del canvas** — degradaría rendimiento.
+Mapbox maneja el mapa base y todas las capas de datos (incidentes, vuelos,
+buques, AOI). **Nunca añadir marcadores DOM encima del canvas**.
+Vuelos y buques usan capas nativas Mapbox (symbol SDF + doble halo).
+Incidentes y heatmap usan Deck.gl vía MapboxOverlay si es necesario.
 
 ## 2. Capas Deck.gl
 

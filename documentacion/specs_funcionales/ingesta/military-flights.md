@@ -266,7 +266,7 @@ DeckGL(controller=true) > Map(react-map-gl)
 
 ---
 
-### 9.2 Solución final: Mapbox SDF con ✈ renderizado en canvas
+### 9.2 Solución final: Mapbox SDF con iconos SVG cargados vía loadImage
 
 #### Arquitectura
 
@@ -275,16 +275,16 @@ Map (react-map-gl, dueño del canvas)
   └── Source (GeoJSON de flights)
         ├── Layer circle (halo oscuro)
         ├── Layer circle (halo claro)
-        └── Layer symbol (SDF ✈, rotado, coloreado)
+        └── Layer symbol (SDF SVG, rotado, coloreado)
 ```
 
 No se usa DeckGL para las capas militares. Todo es nativo de Mapbox GL JS.
 
 #### ¿Por qué funciona?
 
-1. **Sin texturas WebGL externas**: el icono se registra como `Image`
-   HTML estándar, no como textura WebGL de DeckGL. Mapbox lo convierte
-   internamente a su atlas de texturas.
+1. **Iconos SVG nativos**: los iconos se cargan con `map.loadImage()`
+   desde archivos SVG en `public/icons/`. Mapbox los rasteriza internamente
+   a la resolución del dispositivo, sin depender de la fuente del sistema.
 2. **SDF (Signed Distance Field)**: `map.addImage('airplane-icon', img, { sdf: true })`.
    El modo SDF permite que Mapbox coloree dinámicamente el icono con
    `icon-color` y lo escale sin pérdida de calidad.
@@ -293,39 +293,54 @@ No se usa DeckGL para las capas militares. Todo es nativo de Mapbox GL JS.
    rumbo del avión se muestre correctamente en el globo 3D.
 4. **Renderizado nativo**: al ser capas de Mapbox (no de DeckGL), el
    globo 3D, el pitch y el bearing funcionan sin problemas.
+5. **Sin dependencia del SO**: los SVG son idénticos en Windows, macOS
+   y Linux. No hay variabilidad de glifos como con caracteres Unicode
+   (`✈`, `⛵`, `⛨`).
 
-#### Registro del icono (detalle de implementación)
+#### Registro de iconos (detalle de implementación)
 
-El icono ✈ se genera en el evento `onLoad` del mapa:
+Los iconos SVG se cargan en el evento `onLoad` del mapa con
+`map.loadImage()`:
 
 ```typescript
 // IncidentMap.tsx — handleMapLoad
 const handleMapLoad = useCallback((e: any) => {
   const map = e.target
 
-  // 1. Crear canvas 48×48 con el carácter ✈ centrado
-  const size = 48
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')!
-  ctx.font = 'bold 36px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillStyle = '#FFFFFF'
-  ctx.fillText('\u2708', size / 2, size / 2)
+  const icons = [
+    { url: '/icons/airplane.svg', id: 'airplane-icon' },
+    { url: '/icons/ship.svg', id: 'ship-icon' },
+    { url: '/icons/shield.svg', id: 'shield-icon' },
+  ]
 
-  // 2. Convertir canvas a Image (requerido por map.addImage)
-  const img = new Image()
-  img.onload = () => {
-    if (!map.hasImage('airplane-icon')) {
-      // 3. Registrar como SDF para colorización dinámica
-      map.addImage('airplane-icon', img, { sdf: true })
-    }
-  }
-  img.src = canvas.toDataURL()
+  icons.forEach(({ url, id }) => {
+    if (map.hasImage(id)) return
+    map.loadImage(url, (err: any, img: any) => {
+      if (err) {
+        console.error(`Error loading icon ${id}:`, err)
+        return
+      }
+      if (!map.hasImage(id)) {
+        map.addImage(id, img, { sdf: true })
+      }
+    })
+  })
 }, [])
 ```
+
+**Iconos disponibles** (`frontend/public/icons/`):
+
+| Archivo | Icono | ViewBox | Relleno |
+|---------|-------|---------|---------|
+| `airplane.svg` | Silueta de avión militar (vista superior, nariz al norte) | 24×24 | `#FFFFFF` |
+| `ship.svg` | Silueta de buque (vista superior) | 24×24 | `#FFFFFF` |
+| `shield.svg` | Escudo militar | 24×24 | `#FBBF24` |
+
+**Requisitos de los SVG**: sin atributos `width`/`height` fijos (Mapbox
+escala con `icon-size`), sin `stroke` (no funciona bien con SDF), sin
+gradientes ni filtros, `<path>` con `fill` sólido centrado en el viewBox.
+Para aviones, la nariz apunta hacia arriba (0° = norte) y Mapbox rota
+en sentido horario.
 
 **Por qué `onLoad` y no `useEffect` con `useMap()`**:
 - `useMap()` dentro de un componente hijo puede devolver `null` si el
@@ -333,16 +348,23 @@ const handleMapLoad = useCallback((e: any) => {
 - `onLoad` se dispara exactamente cuando el mapa está listo para aceptar
   imágenes. Es el momento canónico para `addImage()`.
 
+**Por qué `map.loadImage()` y no canvas+Unicode** (ver F-CORR-001):
+Los caracteres Unicode dependen de la fuente del sistema operativo y no
+fueron diseñados como iconos de mapa. Los SVG producen siluetas
+predecibles, nítidas y escalables sin depender del SO. Además, el
+código es más simple: 1 llamada a `loadImage` frente a 5 pasos
+(canvas → fillText → toDataURL → new Image → addImage).
+
 #### Contraste: sistema de doble halo
 
-El icono ✈ por sí solo no tiene suficiente contraste contra fondos
+El icono por sí solo no tiene suficiente contraste contra fondos
 variables (satélite oscuro, calles claras, nubes). Se usa un sistema de
 **doble halo** mediante dos capas `circle` debajo del icono:
 
 ```
 Capa halo-dark (circle, #000, 14px, 35% opacity)
   └── Capa halo-light (circle, #FFF, 10px, 30% opacity)
-        └── Capa symbol (✈ SDF, color país, 95% opacity)
+        └── Capa symbol (SDF SVG, color país, 95% opacity)
 ```
 
 ```json

@@ -510,7 +510,7 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **Restricciones**: `hexCode` individual no se expone en API pública (ver `E-SEC`)
 - **`source_independence_class`**: `sensor` — factor confianza: ×2.0
 - **SLA latencia**: < 3 minutos (datos de OpenSky tienen lag ~5 seg)
-- **Renderizado frontend**: capas nativas Mapbox (symbol + circle), icono SDF ✈ generado en `onLoad`, doble halo (oscuro + blanco) para contraste, sin dependencia de DeckGL
+- **Renderizado frontend**: capas nativas Mapbox (symbol + circle), iconos SVG cargados con `map.loadImage()`, registrados como SDF para coloreado dinámico por país, doble halo (oscuro + blanco) para contraste, sin dependencia de DeckGL
 
 ### 2.6 Ingestor AISStream (Buques AIS en Tiempo Real)
 
@@ -539,7 +539,7 @@ El uso de los datos de ACLED está sujeto a términos específicos y restriccion
 - **Relación con MarineTraffic**: fuentes complementarias. AISStream tiene menor latencia (WS vs polling 5 min) y detección nativa de dark-ships. MarineTraffic tiene datos enriquecidos. En deduplicación cross-fuente, AISStream tiene prioridad.
 - **`source_independence_class`**: `sensor` — factor confianza: ×2.0
 - **SLA latencia**: < 5 segundos (emisión AIS → relay → snapshot Redis)
-- **Renderizado frontend** (planificado): ScatterplotLayer para buques (color por deployment/vesselType), PathLayer para trails, capa separada para dark-ships con pulso. Control `[VESSELS]` en LayerControls.
+- **Renderizado frontend**: capas nativas Mapbox (symbol SDF + circle doble halo), icono SVG de buque cargado con `map.loadImage()`, coloreado dinámico por bandera, trail de posiciones como capa `line`, sin dependencia de DeckGL
 - **Métricas obligatorias**: `ais_upstream_connected`, `ais_inbound_per_sec`, `ais_snapshot_age_ms`, `ais_dark_ships_total`
 
 **Variables de entorno requeridas**:

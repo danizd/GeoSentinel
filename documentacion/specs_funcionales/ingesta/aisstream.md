@@ -224,30 +224,42 @@ AIS_POLL_EVENTS_MS=5000          # frecuencia de /api/ais/events
 
 ## 12. Visualización en frontend (ver `F-UI-MAP`)
 
-Tres capas Deck.gl para buques:
+Tres capas nativas Mapbox para buques (igual patrón que vuelos militares):
 
-**ScatterplotLayer** `'vessels-layer'`
-Buques activos como círculos coloreados por `usniDeploymentStatus` o `vesselType`:
+**Circle** `ais-vessels-halo-dark`
+Halo exterior oscuro para contraste sobre fondos claros:
+- `circle-radius`: 14 (18 si `isDark`)
+- `circle-color`: `#000000`
+- `circle-opacity`: 0.35 (0.4 si `isDark`)
 
-| Estado / Tipo | Color |
-|---------------|-------|
-| `deployment` | Rojo `[239,68,68]` |
-| `exercise` | Naranja `[249,115,22]` |
-| `transit` | Amarillo `[234,179,8]` |
-| `unknown` / resto | Gris `[100,116,139]` |
-| `isDark=true` | Púrpura pulsante `[168,85,247]` |
+**Circle** `ais-vessels-halo-light`
+Halo interior blanco para contraste sobre fondos oscuros:
+- `circle-radius`: 10 (14 si `isDark`)
+- `circle-color`: `#FFFFFF`
+- `circle-opacity`: 0.3 (0.4 si `isDark`)
 
-**PathLayer** `'vessels-trails-layer'`
-Últimas N posiciones por MMSI como trail de movimiento.
-El relay debe mantener un buffer histórico de posiciones por buque.
+**Symbol** `ais-vessels-symbol`
+Icono SVG de buque cargado con `map.loadImage('/icons/ship.svg')`,
+registrado como SDF para colorizado dinámico por bandera:
+- `icon-image`: `ship-icon`
+- `icon-size`: 0.35
+- `icon-rotate`: `['get', 'heading']`
+- `icon-rotation-alignment`: `'map'`
+- `icon-color`: `['get', 'color']` (color por país/bandera)
+- `icon-opacity`: `['case', ['get', 'isDark'], 0.7, 0.95]`
 
-**ScatterplotLayer** `'vessels-dark-layer'`
-Capa separada solo para dark-ships (`isDark=true`).
-Radio mayor, color púrpura, animación de pulso via Framer Motion
-en componente DOM superpuesto (no en canvas).
+**Line** `vessels-trails-layer`
+Trayecto de posiciones históricas por MMSI como trail de movimiento.
+
+**Color por estado/bandera** (ver `F-UI-MAP`):
+- `deployment` → rojo
+- `exercise` → naranja
+- `transit` → amarillo
+- `unknown` / resto → gris
+- `isDark=true` → púrpura pulsante
 
 La capa de buques se activa desde el control `[VESSELS]`
-en `LayerControls` (`F-UI-MAP §5`) — añadir este botón.
+en `LayerControls` (`F-UI-MAP §5`).
 
 ---
 

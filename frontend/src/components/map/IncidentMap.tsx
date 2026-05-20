@@ -511,58 +511,25 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
 
   const handleMapLoad = useCallback((e: any) => {
     const map = e.target
-    const size = 48
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
-    ctx.font = 'bold 36px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillText('\u2708', size / 2, size / 2)
 
-    const img = new Image()
-    img.onload = () => {
-      if (!map.hasImage('airplane-icon')) {
-        map.addImage('airplane-icon', img, { sdf: true })
-      }
-    }
-    img.src = canvas.toDataURL()
+    const icons = [
+      { url: '/icons/airplane.svg', id: 'airplane-icon' },
+      { url: '/icons/ship.svg', id: 'ship-icon' },
+      { url: '/icons/shield.svg', id: 'shield-icon' },
+    ]
 
-    const shipCanvas = document.createElement('canvas')
-    shipCanvas.width = 48
-    shipCanvas.height = 48
-    const sctx = shipCanvas.getContext('2d')!
-    sctx.font = 'bold 36px sans-serif'
-    sctx.textAlign = 'center'
-    sctx.textBaseline = 'middle'
-    sctx.fillStyle = '#FFFFFF'
-    sctx.fillText('\u26F5', 24, 24)
-    const shipImg = new Image()
-    shipImg.onload = () => {
-      if (!map.hasImage('ship-icon')) {
-        map.addImage('ship-icon', shipImg, { sdf: true })
-      }
-    }
-    shipImg.src = shipCanvas.toDataURL()
-
-    const shieldCanvas = document.createElement('canvas')
-    shieldCanvas.width = 48
-    shieldCanvas.height = 48
-    const shctx = shieldCanvas.getContext('2d')!
-    shctx.font = 'bold 30px serif'
-    shctx.textAlign = 'center'
-    shctx.textBaseline = 'middle'
-    shctx.fillStyle = '#FBBF24'
-    shctx.fillText('\u26E8', 24, 24)
-    const shieldImg = new Image()
-    shieldImg.onload = () => {
-      if (!map.hasImage('shield-icon')) {
-        map.addImage('shield-icon', shieldImg, { sdf: true })
-      }
-    }
-    shieldImg.src = shieldCanvas.toDataURL()
+    icons.forEach(({ url, id }) => {
+      if (map.hasImage(id)) return
+      map.loadImage(url, (err: any, img: any) => {
+        if (err) {
+          console.error(`Error loading icon ${id}:`, err)
+          return
+        }
+        if (!map.hasImage(id)) {
+          map.addImage(id, img, { sdf: true })
+        }
+      })
+    })
   }, [])
 
   const handleMouseMove = useCallback((e: any) => {

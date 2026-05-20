@@ -11,67 +11,72 @@ Si falta información en las specs → señalarlo. **No inventar.**
 
 ## Tabla de enrutamiento: Tarea → Spec
 
-### Specs estructurales `specs_estructurales/` — cargar siempre como contexto base
+### Specs estructurales `documentacion/specs_estructurales/` — cargar siempre como contexto base
 
 | Código | Archivo | Cuándo |
 |--------|---------|--------|
-| `E-ARCH` | `arquitectura.md` | Nuevos componentes backend, cambios en flujo de datos |
-| `E-ARCH-FRONT` | `arquitectura-frontend.md` | **Siempre en tareas frontend** |
-| `E-MODEL` | `modelo-datos.md` | Esquemas SQL, migraciones, modelos Pydantic |
-| `E-SOURCES` | `fuentes-datos.md` | Añadir/modificar/sustituir fuentes externas |
-| `E-SEC` | `seguridad.md` | Auth, secretos, exposición de API |
-| `E-STD` | `estandares-codigo.md` | **Siempre** — estilo, tests, naming |
-| `E-INFRA` | `infraestructura.md` | Docker, K8s, CI/CD, variables de entorno |
-| `E-MON` | `monitorizacion.md` | Lotablagging, métricas, SLAs de latencia |
+| `E-ARCH` | `documentacion/specs_estructurales/arquitectura.md` | Nuevos componentes backend, cambios en flujo de datos |
+| `E-ARCH-FRONT` | `documentacion/specs_estructurales/arquitectura-frontend.md` | **Siempre en tareas frontend** |
+| `E-MODEL` | `documentacion/specs_estructurales/modelo-datos.md` | Esquemas SQL, migraciones, modelos Pydantic |
+| `E-SOURCES` | `documentacion/specs_estructurales/fuentes-datos.md` | Añadir/modificar/sustituir fuentes externas |
+| `E-SEC` | `documentacion/specs_estructurales/seguridad.md` | Auth, secretos, exposición de API |
+| `E-STD` | `documentacion/specs_estructurales/estandares-codigo.md` | **Siempre** — estilo, tests, naming |
+| `E-INFRA` | `documentacion/specs_estructurales/infraestructura.md` | Docker, K8s, CI/CD, variables de entorno |
+| `E-MON` | `documentacion/specs_estructurales/monitorizacion.md` | Lotablagging, métricas, SLAs de latencia |
 
-### Specs funcionales `specs_funcionales/` — cargar según tarea
+### Specs funcionales `documentacion/specs_funcionales/` — cargar según tarea
 
 #### Ingesta `ingesta/`
 | Código | Archivo | Tarea |
 |--------|---------|-------|
-| `F-ING-GDELT` | `ingesta/gdelt.md` | Ingestor GDELT Cloud Events v2 |
-| `F-ING-ACLED` | `ingesta/acled.md` | Ingestor ACLED |
-| `F-ING-FIRMS` | `ingesta/firms.md` | Ingestor FIRMS NASA |
-| `F-ING-USGS` | `ingesta/usgs.md` | Ingestor USGS terremotos |
-| `F-ING-MIL` | `ingesta/military-flights.md` | Ingestor Vuelos Militares (OpenSky via relay) |
-| `F-ING-AIS` | `ingesta/aisstream.md` | Ingestor Buques AISStream (WebSocket) |
-| `F-ING-MT` | `ingesta/marinetraffic.md` | Ingestor MarineTraffic AIS |
-| `F-ING-LUM` | `ingesta/liveuamap.md` | Ingestor Liveuamap (riesgo alto) |
+| `F-ING-GDELT` | `documentacion/specs_funcionales/ingesta/gdelt.md` | Ingestor GDELT Cloud Events v2 |
+| `F-ING-ACLED` | `documentacion/specs_funcionales/ingesta/acled.md` | Ingestor ACLED |
+| `F-ING-FIRMS` | `documentacion/specs_funcionales/ingesta/firms.md` | Ingestor FIRMS NASA |
+| `F-ING-USGS` | `documentacion/specs_funcionales/ingesta/usgs.md` | Ingestor USGS terremotos |
+| `F-ING-MIL` | `documentacion/specs_funcionales/ingesta/military-flights.md` | Ingestor Vuelos Militares (OpenSky via relay) |
+| `F-ING-AIS` | `documentacion/specs_funcionales/ingesta/aisstream.md` | Ingestor Buques AISStream (WebSocket) |
+| `F-ING-MT` | `documentacion/specs_funcionales/ingesta/marinetraffic.md` | Ingestor MarineTraffic AIS |
+| `F-ING-LUM` | `documentacion/specs_funcionales/ingesta/liveuamap.md` | Ingestor Liveuamap (riesgo alto) |
 
 #### Normalización `normalizacion/`
 | Código | Archivo | Tarea |
 |--------|---------|-------|
-| `F-NORM-CANON` | `normalizacion/modelo-canonico.md` | Mappers fuente → `events_canonical`, UTC |
-| `F-NORM-ACTORS` | `normalizacion/actores.md` | Diccionario CAMEO↔ACLED↔interno |
-| `F-NORM-SEV` | `normalizacion/escala-severidad.md` | Escala 0–10 por categoría |
-| `F-NORM-CONF` | `normalizacion/modelo-confianza.md` | Confidence con clases de independencia |
+| `F-NORM-CANON` | `documentacion/specs_funcionales/normalizacion/modelo-canonico.md` | Mappers fuente → `events_canonical`, UTC |
+| `F-NORM-ACTORS` | `documentacion/specs_funcionales/normalizacion/actores.md` | Diccionario CAMEO↔ACLED↔interno |
+| `F-NORM-SEV` | `documentacion/specs_funcionales/normalizacion/escala-severidad.md` | Escala 0–10 por categoría |
+| `F-NORM-CONF` | `documentacion/specs_funcionales/normalizacion/modelo-confianza.md` | Confidence con clases de independencia |
 
 #### Procesamiento `procesamiento/`
 | Código | Archivo | Tarea |
 |--------|---------|-------|
-| `F-VAL` | `procesamiento/validacion-quarantine.md` | Reglas de validación, tabla quarantine |
-| `F-DEDUP` | `procesamiento/deduplicacion.md` | Claves naturales por fuente |
-| `F-CLUST` | `procesamiento/clustering.md` | DBSCAN espacio-temporal, métrica mixta |
-| `F-LC` | `procesamiento/ciclo-vida-incidente.md` | Máquina de estados, transiciones, purga |
-| `F-AOI` | `procesamiento/aoi.md` | AOI como entidad de primera clase |
+| `F-VAL` | `documentacion/specs_funcionales/procesamiento/validacion-quarantine.md` | Reglas de validación, tabla quarantine |
+| `F-DEDUP` | `documentacion/specs_funcionales/procesamiento/deduplicacion.md` | Claves naturales por fuente |
+| `F-CLUST` | `documentacion/specs_funcionales/procesamiento/clustering.md` | DBSCAN espacio-temporal, métrica mixta |
+| `F-LC` | `documentacion/specs_funcionales/procesamiento/ciclo-vida-incidente.md` | Máquina de estados, transiciones, purga |
+| `F-AOI` | `documentacion/specs_funcionales/procesamiento/aoi.md` | AOI como entidad de primera clase |
 
 #### API `api/`
 | Código | Archivo | Tarea |
 |--------|---------|-------|
-| `F-API-INC` | `api/incidents.md` | `GET /v1/incidents` — filtros, paginación |
-| `F-API-AOI` | `api/aoi.md` | CRUD `/v1/aoi`, suscripciones |
-| `F-API-CORR` | `api/corrections.md` | `POST /v1/corrections` — human-in-the-loop |
+| `F-API-INC` | `documentacion/specs_funcionales/api/incidents.md` | `GET /v1/incidents` — filtros, paginación |
+| `F-API-AOI` | `documentacion/specs_funcionales/api/aoi.md` | CRUD `/v1/aoi`, suscripciones |
+| `F-API-CORR` | `documentacion/specs_funcionales/api/corrections.md` | `POST /v1/corrections` — human-in-the-loop |
 
 #### UI `ui/`
 | Código | Archivo | Tarea |
 |--------|---------|-------|
-| `F-UI-DASH` | `ui/dashboard.md` | Layout principal C2, panels, statusbar |
-| `F-UI-MAP` | `ui/mapa-incidentes.md` | Mapbox GL JS + Deck.gl, capas, interacciones |
-| `F-UI-TIEMPO-REAL` | `ui/tiempo-real.md` | Polling TanStack Query, estados de carga |
-| `F-UI-AUTH` | `ui/autenticacion-ui.md` | Login, authStore, protección de rutas |
-| `F-UI-CORR` | `ui/correcciones-ui.md` | UI correcciones humanas, confirmaciones |
-| `F-UI-AOI` | `ui/aoi-ui.md` | Gestión de AOI, dibujo en mapa |
-| `F-UI-REFRESH` | `ui/refresh-controls.md` | Botones de actualización manual de datos |
+| `F-UI-DASH` | `documentacion/specs_funcionales/ui/dashboard.md` | Layout principal C2, panels, statusbar |
+| `F-UI-MAP` | `documentacion/specs_funcionales/ui/mapa-incidentes.md` | Mapbox GL JS + Deck.gl, capas, interacciones |
+| `F-UI-TIEMPO-REAL` | `documentacion/specs_funcionales/ui/tiempo-real.md` | Polling TanStack Query, estados de carga |
+| `F-UI-AUTH` | `documentacion/specs_funcionales/ui/autenticacion-ui.md` | Login, authStore, protección de rutas |
+| `F-UI-CORR` | `documentacion/specs_funcionales/ui/correcciones-ui.md` | UI correcciones humanas, confirmaciones |
+| `F-UI-AOI` | `documentacion/specs_funcionales/ui/aoi-ui.md` | Gestión de AOI, dibujo en mapa |
+| `F-UI-REFRESH` | `documentacion/specs_funcionales/ui/refresh-controls.md` | Botones de actualización manual de datos |
+
+#### Correcciones `correcciones/`
+| Código | Archivo | Tarea |
+|--------|---------|-------|
+| `F-CORR-001` | `documentacion/specs_funcionales/correcciones/iconos-svg-mapbox.md` | Sustituir iconos Unicode por SVG en capas de vuelos y buques |
 ---
 
 ## Combinaciones de contexto para tareas complejas

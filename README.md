@@ -508,8 +508,9 @@ geosentinel/
 │   │       └── admin.ts         # POST /v1/admin/run
 │   ├── public/
 │   └── package.json
-├── specs_estructurales/     # E-ARCH, E-MODEL, E-SEC, E-STD, E-MON...
-├── specs_funcionales/       # F-ING-*, F-NORM-*, F-CLUST, F-LC, F-API-*
+├── documentacion/
+│   ├── specs_estructurales/     # E-ARCH, E-MODEL, E-SEC, E-STD, E-MON...
+│   └── specs_funcionales/       # F-ING-*, F-NORM-*, F-CLUST, F-LC, F-API-*
 ├── docker-compose.yml           # PostgreSQL 16 + PostGIS 3.4 (dev local)
 ├── docker-compose.prod.yml      # Produccion: backend + relays + frontend
 ├── docker/

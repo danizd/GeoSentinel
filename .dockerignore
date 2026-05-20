@@ -23,5 +23,5 @@ verify.py
 .acled_token_cache
 AGENTS.md
 PROMPS.md
-specs_estructurales/
-specs_funcionales/
+documentacion/specs_estructurales/
+documentacion/specs_funcionales/
