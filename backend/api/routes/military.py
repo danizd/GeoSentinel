@@ -1,6 +1,5 @@
-import logging
+﻿import logging
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import requests
@@ -79,28 +78,6 @@ def get_aoi_bboxes(db: Session) -> list[dict]:
     return aois
 
 
-def _fetch_aoi_flights(aoi: dict) -> tuple[list[dict], list[dict], bool]:
-    """Consulta el relay militar para una AOI. Devuelve (flights, clusters, is_stale)."""
-    try:
-        response = requests.get(
-            f"{RELAY_URL}/api/military/v1/list-military-flights",
-            params={
-                "neLat": aoi["max_lat"],
-                "neLon": aoi["max_lon"],
-                "swLat": aoi["min_lat"],
-                "swLon": aoi["min_lon"],
-            },
-            timeout=10,
-        )
-        response.raise_for_status()
-        data = response.json()
-        stale = response.headers.get("X-Stale", "").lower() == "true"
-        return data.get("flights", []), data.get("clusters", []), stale
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to fetch from relay for AOI {aoi['name']}: {e}")
-        return [], [], False
-
-
 @router.get("/military-flights", response_model=MilitaryFlightsResponseDTO)
 def list_military_flights(
     db: Session = Depends(get_db),
@@ -111,24 +88,30 @@ def list_military_flights(
         logger.warning("No active AOIs found for military flights")
         return MilitaryFlightsResponseDTO()
 
-    all_flights: list[dict] = []
-    all_clusters: list[dict] = []
-    is_stale = False
+    # Una sola llamada al relay con el bbox union de todas las AOIs activas.
+    # Los vuelos militares operan globalmente; 39 queries separadas serializan
+    # el OpenSkyRateLimiter del relay y provocan 504.
+    ne_lat = max(aoi["max_lat"] for aoi in aois)
+    ne_lon = max(aoi["max_lon"] for aoi in aois)
+    sw_lat = min(aoi["min_lat"] for aoi in aois)
+    sw_lon = min(aoi["min_lon"] for aoi in aois)
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(_fetch_aoi_flights, aoi): aoi for aoi in aois}
-        for future in as_completed(futures, timeout=20):
-            flights, clusters, stale = future.result()
-            all_flights.extend(flights)
-            all_clusters.extend(clusters)
-            if stale:
-                is_stale = True
-
-    flights_dto = [MilitaryFlightDTO(**f) for f in all_flights]
-    clusters_dto = [MilitaryFlightClusterDTO(**c) for c in all_clusters]
-
-    return MilitaryFlightsResponseDTO(
-        flights=flights_dto,
-        clusters=clusters_dto,
-        isStale=is_stale,
-    )
+    try:
+        response = requests.get(
+            f"{RELAY_URL}/api/military/v1/list-military-flights",
+            params={"neLat": ne_lat, "neLon": ne_lon, "swLat": sw_lat, "swLon": sw_lon},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        stale = response.headers.get("X-Stale", "").lower() == "true"
+        flights_dto = [MilitaryFlightDTO(**f) for f in data.get("flights", [])]
+        clusters_dto = [MilitaryFlightClusterDTO(**c) for c in data.get("clusters", [])]
+        return MilitaryFlightsResponseDTO(
+            flights=flights_dto,
+            clusters=clusters_dto,
+            isStale=stale,
+        )
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch military flights from relay: {e}")
+        return MilitaryFlightsResponseDTO()
