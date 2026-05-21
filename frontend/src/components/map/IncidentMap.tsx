@@ -198,6 +198,24 @@ function AircraftIconManager({ flights }: { flights: MilitaryFlight[] }) {
 			'circle-stroke-opacity': 0.7,
 		  }}
 		/>
+		<Layer
+		  id="military-flights-symbol"
+		  type="symbol"
+		  source="military-flights-src"
+		  layout={{
+			'icon-image': 'airplane-icon',
+			'icon-size': 0.22,
+			'icon-allow-overlap': true,
+			'icon-ignore-placement': true,
+			'icon-rotate': ['get', 'heading'],
+			'icon-rotation-alignment': 'map',
+			'icon-pitch-alignment': 'map',
+		  }}
+		  paint={{
+			'icon-color': ['get', 'color'],
+			'icon-opacity': 1,
+		  }}
+		/>
     </Source>
   )
 }

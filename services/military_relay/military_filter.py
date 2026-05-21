@@ -1,4 +1,4 @@
-import re
+﻿import re
 from functools import lru_cache
 from typing import Optional
 
@@ -48,8 +48,8 @@ def is_hex_military(hex_code: Optional[str]) -> bool:
 
 @lru_cache(maxsize=1)
 def _compiled_ranges() -> list[tuple[int, int]]:
-    """Convierte MILITARY_HEX_RANGES a pares de enteros para comparación eficiente.
-    Se compila una única vez gracias a lru_cache.
+    """Convierte MILITARY_HEX_RANGES a pares de enteros para comparacion eficiente.
+    Se compila una unica vez gracias a lru_cache.
 
     Returns:
         Lista de tuplas (hex_min_int, hex_max_int) por rango ICAO militar.
@@ -61,15 +61,15 @@ def _compiled_ranges() -> list[tuple[int, int]]:
 
 
 def is_hex_military_by_range(hex_code: Optional[str]) -> bool:
-    """Comprueba si un código ICAO24 cae dentro de un rango asignado a uso
-    militar por país según MILITARY_HEX_RANGES.
+    """Comprueba si un codigo ICAO24 cae dentro de un rango asignado a uso
+    militar por pais segun MILITARY_HEX_RANGES.
 
     Args:
-        hex_code: Código ICAO24 en cualquier formato (mayúsculas, minúsculas,
+        hex_code: Codigo ICAO24 en cualquier formato (mayusculas, minusculas,
                   con guiones o espacios).
 
     Returns:
-        True si el código pertenece a un rango militar conocido.
+        True si el codigo pertenece a un rango militar conocido.
     """
     if not hex_code:
         return False
@@ -87,23 +87,25 @@ def is_military(hex_code: Optional[str], callsign: Optional[str], category: int 
     """Determina si una aeronave es militar por cualquiera de los criterios
     disponibles, en orden de fiabilidad decreciente.
 
-    Prioridad: category==7 → rango ICAO → hex individual → prefijo callsign.
+    Prioridad: category==7 -> rango ICAO -> hex individual -> callsign+hex.
+    El callsign solo no es suficiente: requiere confirmacion de hex para evitar
+    falsos positivos con prefijos de 3 letras que coincidan con aerolineas civiles.
 
     Args:
-        hex_code: Código ICAO24 de la aeronave.
+        hex_code: Codigo ICAO24 de la aeronave.
         callsign: Indicativo de vuelo.
-        category: Categoría ADS-B (7 = militar según estándar ICAO).
+        category: Categoria ADS-B (7 = militar segun estandar ICAO).
 
     Returns:
         True si la aeronave es militar por alguno de los criterios.
     """
     if category == 7:
         return True
-    if is_hex_military_by_range(hex_code):
+    hex_confirmed = is_hex_military_by_range(hex_code) or is_hex_military(hex_code)
+    if hex_confirmed:
         return True
-    if is_hex_military(hex_code):
-        return True
-    if is_callsign_military(callsign):
+    # Callsign actua como refuerzo solo si el hex ya confirma la aeronave
+    if is_callsign_military(callsign) and hex_confirmed:
         return True
     return False
 
