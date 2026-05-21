@@ -26,9 +26,9 @@ const LAYER_BUTTONS = [
   { key: 'scatter' as const, label: 'PUNTOS' },
   { key: 'heat' as const, label: 'CALOR' },
   { key: 'aoi' as const, label: 'ZONAS' },
-  { key: 'tracks' as const, label: 'VUELOS' },
-  { key: 'vessels' as const, label: 'BUQUES' },
-  { key: 'bases' as const, label: 'BASES' },
+  { key: 'tracks' as const, label: 'VUELOS MILITARES' },
+  { key: 'vessels' as const, label: 'BUQUES MILITARES' },
+  { key: 'bases' as const, label: 'BASES DE EEUU' },
 ]
 
 export function Dashboard() {
