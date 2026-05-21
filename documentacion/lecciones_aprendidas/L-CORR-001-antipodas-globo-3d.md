@@ -36,16 +36,25 @@ El filtrado por hemisferio visible (intento #9) DEBERÍA funcionar: se calcula e
 4. **React 19 concurrent rendering**: los cambios de estado en `globeCenter` podrían no estar triggerando re-renders del Source de Mapbox correctamente.
 5. **Mapbox GL JS globe culling bug**: podría ser un bug conocido de Mapbox GL JS v3.9.3 donde las capas `circle` no tienen backface culling correcto en proyección globe.
 
-## Próximos pasos recomendados
+## Solución aplicada (2026-05-21)
 
-1. **Verificar el bundle actual**: abrir DevTools → Sources → buscar `geojsonData` en el JS servido para confirmar que el filtro de hemisferio está presente en el código ejecutado.
-2. **Rebuild completo**: `cd frontend && npm run build` y reiniciar el servidor de producción.
-3. **Probar en incógnito**: abrir el dashboard en ventana de incógnito para descartar cache.
-4. **Console log de debug**: añadir `console.log('globeCenter:', globeCenter, 'features:', geojsonData.features.length)` en el componente para verificar que el filtro se está ejecutando.
-5. **Si el filtro funciona pero se ven antípodas**: el problema es de Mapbox GL JS (backface culling). Solución alternativa: usar capas `symbol` con icono SVG en vez de `circle`, o usar Deck.gl con `GlobeLayer`.
-6. **Si el filtro NO se ejecuta**: el problema es de re-render de React o de cache del build.
+**Causa raíz confirmada**: en `mapbox-gl@3.9.3` con proyección `globe`, las capas de tipo `circle` no se recortan por la cara opuesta del planeta. Ningún `paint`/`layout` ni filtrado en CPU lo soluciona de forma robusta (durante animaciones de rotación los puntos de antípodas se siguen viendo). Las capas `symbol` con `icon-pitch-alignment: 'map'` **sí** se ocluyen correctamente — por eso la capa de buques (que ya usaba `symbol`) nunca presentó el bug.
+
+**Fix definitivo**:
+
+1. Sustituida la capa `incidents-point` (tipo `circle`) por una capa `symbol` con icono SDF `/icons/incident-dot.svg`, coloreado por categoría vía `icon-color`. Tamaño interpolado por severidad.
+2. Sustituida la capa `incident-selected` (anillo del seleccionado) por una capa `symbol` con icono SDF `/icons/incident-ring.svg`.
+3. Ambas capas usan `icon-pitch-alignment: 'map'` (clave para el culling) y `icon-rotation-alignment: 'viewport'` (mantiene los iconos de cara al usuario).
+4. Eliminado el filtro hemisférico de `geojsonData`, `globeCenter` state y `handleMoveEnd` — ya no son necesarios.
+5. **Excepción**: `PulseOverlay` proyecta DOM vía `map.project()` y no se beneficia del fix de la capa Mapbox. Se mantiene un dot-product check residual dentro del `update()` del overlay para no pintar pulsos en antípodas.
+
+## Lecciones
+
+- En proyección `globe`, **siempre preferir `symbol` sobre `circle`** para puntos de datos. El filtrado en CPU es un parche frágil.
+- Los iconos SDF permiten reutilizar un único SVG y colorearlo dinámicamente con `icon-color`, evitando crear N variantes de icono.
+- Cualquier overlay DOM que proyecte coordenadas geográficas a píxeles necesita su propio chequeo de visibilidad porque `map.project()` no informa de oclusión por el globo.
 
 ## Código relevante
 
-- `frontend/src/components/map/IncidentMap.tsx` — `geojsonData` useMemo con filtro de hemisferio, `globeCenter` state, `handleMoveEnd`
-- `frontend/src/stores/mapStore.ts` — `viewport` (no se actualiza al rotar el globo)
+- `frontend/src/components/map/IncidentMap.tsx` — capas `incidents-point` e `incident-selected` como `symbol`; `PulseOverlay` con dot-check residual.
+- `frontend/public/icons/incident-dot.svg`, `incident-ring.svg` — iconos SDF.

@@ -361,9 +361,25 @@ function PulseOverlay({ incidents, mapRef }: { incidents: Incident[]; mapRef: Re
     }
 
     const update = () => {
+      // En proyección globe, map.project() devuelve píxeles incluso para puntos
+      // en la cara opuesta del planeta. Filtramos por producto escalar 3D
+      // entre el centro visible y cada punto para evitar pulsos en antípodas.
+      const center = map.getCenter()
+      const cLon = center.lng * Math.PI / 180
+      const cLat = center.lat * Math.PI / 180
+      const cx = Math.cos(cLat) * Math.cos(cLon)
+      const cy = Math.cos(cLat) * Math.sin(cLon)
+      const cz = Math.sin(cLat)
+
       const positions: Array<{ id: string; x: number; y: number; color: string }> = []
       for (const inc of activeIncidents) {
         if (!inc.canonical_point) continue
+        const lon = inc.canonical_point.lon * Math.PI / 180
+        const lat = inc.canonical_point.lat * Math.PI / 180
+        const dot = cx * Math.cos(lat) * Math.cos(lon) +
+                    cy * Math.cos(lat) * Math.sin(lon) +
+                    cz * Math.sin(lat)
+        if (dot < 0) continue
         const px = map.project([inc.canonical_point.lon, inc.canonical_point.lat])
         if (px.x < 0 || px.y < 0 || px.x > window.innerWidth || px.y > window.innerHeight) continue
         positions.push({
@@ -429,7 +445,6 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
   const mapRef = useRef<MapRef | null>(null)
   const { viewport, layers, selectedIncident } = useMapStore()
   const [is3D, setIs3D] = useState(true)
-  const [globeCenter, setGlobeCenter] = useState({ lon: DEFAULT_VIEWPORT.longitude, lat: DEFAULT_VIEWPORT.latitude })
   const [selectedFlight, setSelectedFlight] = useState<MilitaryFlight | null>(null)
   const [selectedVessel, setSelectedVessel] = useState<AISVessel | null>(null)
   const [hover, setHover] = useState<{ x: number; y: number; incidentId: string } | null>(null)
@@ -510,24 +525,10 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
   }, [viewport])
 
   const geojsonData = useMemo(() => {
-    const centerLon = globeCenter.lon * Math.PI / 180
-    const centerLat = globeCenter.lat * Math.PI / 180
-    const cx = Math.cos(centerLat) * Math.cos(centerLon)
-    const cy = Math.cos(centerLat) * Math.sin(centerLon)
-    const cz = Math.sin(centerLat)
-
     return {
       type: 'FeatureCollection' as const,
       features: incidents
         .filter(i => i.canonical_point)
-        .filter(i => {
-          const lon = i.canonical_point!.lon * Math.PI / 180
-          const lat = i.canonical_point!.lat * Math.PI / 180
-          const dot = cx * Math.cos(lat) * Math.cos(lon) +
-                      cy * Math.cos(lat) * Math.sin(lon) +
-                      cz * Math.sin(lat)
-          return dot > -0.1
-        })
         .map((incident) => ({
           type: 'Feature' as const,
           properties: {
@@ -545,7 +546,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
           },
         })),
     }
-  }, [incidents, globeCenter.lon, globeCenter.lat])
+  }, [incidents])
 
   useEffect(() => {
     if (!selectedIncident?.canonical_point) return
@@ -560,7 +561,6 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         duration: 1800,
         essential: true,
       })
-      setGlobeCenter({ lon: selectedIncident.canonical_point.lon, lat: selectedIncident.canonical_point.lat })
     }
   }, [selectedIncident])
 
@@ -607,17 +607,13 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       { url: '/icons/airplane.svg', id: 'airplane-icon' },
       { url: '/icons/ship.svg', id: 'ship-icon' },
       { url: '/icons/shield.svg', id: 'shield-icon' },
+      { url: '/icons/incident-dot.svg', id: 'incident-dot-icon' },
+      { url: '/icons/incident-ring.svg', id: 'incident-ring-icon' },
     ]
 
     Promise.all(icons.map(({ url, id }) => svgToImageData(url, id))).catch(err =>
       console.error('Error loading icons:', err),
     )
-  }, [])
-
-  const handleMoveEnd = useCallback((e: any) => {
-    const map = e.target
-    const center = map.getCenter()
-    setGlobeCenter({ lon: center.lng, lat: center.lat })
   }, [])
 
   const handleMouseMove = useCallback((e: any) => {
@@ -703,7 +699,6 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
         ref={mapRef}
         initialViewState={displayViewport}
         onLoad={handleMapLoad}
-        onMoveEnd={handleMoveEnd}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -716,12 +711,22 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
       >
         {layers.scatter && (
           <Source id="incidents" type="geojson" data={geojsonData}>
+            {/* Capa symbol con icono SDF: en proyección globe, los símbolos sí
+                se ocluyen por la cara opuesta del planeta (a diferencia de circle).
+                icon-pitch-alignment: 'map' es clave para el culling correcto. */}
             <Layer
               id="incidents-point"
-              type="circle"
+              type="symbol"
+              layout={{
+                'icon-image': 'incident-dot-icon',
+                'icon-size': ['interpolate', ['linear'], ['get', 'severity'], 0, 0.18, 10, 0.55],
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-pitch-alignment': 'map',
+                'icon-rotation-alignment': 'viewport',
+              }}
               paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'severity'], 0, 4, 10, 14],
-                'circle-color': [
+                'icon-color': [
                   'match', ['get', 'category'],
                   'conflict', '#ef4444',
                   'wildfire', '#f97316',
@@ -735,23 +740,26 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
                   'other', '#64748b',
                   '#38bdf8',
                 ],
-                'circle-opacity': 0.92,
-                'circle-stroke-width': 1.5,
-                'circle-stroke-color': '#ffffff',
-                'circle-stroke-opacity': 0.6,
+                'icon-opacity': 0.95,
+                'icon-halo-color': '#ffffff',
+                'icon-halo-width': 1,
               }}
             />
             <Layer
               id="incident-selected"
-              type="circle"
+              type="symbol"
               filter={selectedIncident ? ['==', ['get', 'id'], selectedIncident.incident_id] : ['==', ['get', 'id'], '']}
+              layout={{
+                'icon-image': 'incident-ring-icon',
+                'icon-size': 1.0,
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-pitch-alignment': 'map',
+                'icon-rotation-alignment': 'viewport',
+              }}
               paint={{
-                'circle-radius': 24,
-                'circle-color': '#000000',
-                'circle-opacity': 0,
-                'circle-stroke-width': 3,
-                'circle-stroke-color': '#38bdf8',
-                'circle-stroke-opacity': 1,
+                'icon-color': '#38bdf8',
+                'icon-opacity': 1,
               }}
             />
           </Source>
