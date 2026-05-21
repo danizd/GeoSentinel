@@ -1,5 +1,6 @@
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import requests
@@ -78,6 +79,28 @@ def get_aoi_bboxes(db: Session) -> list[dict]:
     return aois
 
 
+def _fetch_aoi_flights(aoi: dict) -> tuple[list[dict], list[dict], bool]:
+    """Consulta el relay militar para una AOI. Devuelve (flights, clusters, is_stale)."""
+    try:
+        response = requests.get(
+            f"{RELAY_URL}/api/military/v1/list-military-flights",
+            params={
+                "neLat": aoi["max_lat"],
+                "neLon": aoi["max_lon"],
+                "swLat": aoi["min_lat"],
+                "swLon": aoi["min_lon"],
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        stale = response.headers.get("X-Stale", "").lower() == "true"
+        return data.get("flights", []), data.get("clusters", []), stale
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch from relay for AOI {aoi['name']}: {e}")
+        return [], [], False
+
+
 @router.get("/military-flights", response_model=MilitaryFlightsResponseDTO)
 def list_military_flights(
     db: Session = Depends(get_db),
@@ -92,30 +115,14 @@ def list_military_flights(
     all_clusters: list[dict] = []
     is_stale = False
 
-    for aoi in aois:
-        try:
-            response = requests.get(
-                f"{RELAY_URL}/api/military/v1/list-military-flights",
-                params={
-                    "neLat": aoi["max_lat"],
-                    "neLon": aoi["max_lon"],
-                    "swLat": aoi["min_lat"],
-                    "swLon": aoi["min_lon"],
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            if response.headers.get("X-Stale", "").lower() == "true":
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_fetch_aoi_flights, aoi): aoi for aoi in aois}
+        for future in as_completed(futures, timeout=20):
+            flights, clusters, stale = future.result()
+            all_flights.extend(flights)
+            all_clusters.extend(clusters)
+            if stale:
                 is_stale = True
-
-            all_flights.extend(data.get("flights", []))
-            all_clusters.extend(data.get("clusters", []))
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to fetch from relay for AOI {aoi['name']}: {e}")
-            continue
 
     flights_dto = [MilitaryFlightDTO(**f) for f in all_flights]
     clusters_dto = [MilitaryFlightClusterDTO(**c) for c in all_clusters]
