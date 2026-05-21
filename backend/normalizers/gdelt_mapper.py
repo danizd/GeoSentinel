@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -93,24 +94,47 @@ def _normalize_severity(goldstein: float | None) -> float:
     return 1.0
 
 
+_TITLE_KEYWORDS: list[tuple[list[str], str]] = [
+    (["drone strike", "airstrike", "air strike", "missile strike", "bombing raid"], "conflict_airstrike"),
+    (["suicide bomb", "car bomb", "roadside bomb", "ied", "improvised explosive", "detonation"], "conflict_explosion"),
+    (["assassination", "massacre", "execution", "ethnic cleansing"], "conflict_atrocity"),
+    (["terrorist attack", "terrorism", "jihadist", "extremist attack"], "conflict_terror"),
+    (["armed clash", "armed conflict", "gunfight", "firefight", "armed battle"], "conflict_battle"),
+    (["mass protest", "mass demonstration"], "social_protest"),
+]
+
+
+def _match_title_keywords(title_lower: str) -> str | None:
+    """Intenta clasificar por frases literales en el título. Solo frases inequívocas
+    para evitar falsos positivos (p. ej. 'battle against drought', 'strike action').
+
+    Args:
+        title_lower: Título del artículo en minúsculas.
+
+    Returns:
+        Tipo de evento interno o None si no hay coincidencia.
+    """
+    for phrases, event_type in _TITLE_KEYWORDS:
+        for phrase in phrases:
+            if re.search(r'\b' + re.escape(phrase) + r'\b', title_lower):
+                return event_type
+    return None
+
+
 def _map_category(category: str | None, subcategory: str | None, title: str | None = None) -> str:
-    title_lower = title.lower() if title else ""
+    """Mapea los campos de categoría de GDELT Cloud al tipo de evento interno.
 
-    if "drone" in title_lower or "strike" in title_lower or "missile" in title_lower or "bomb" in title_lower:
-        return "conflict_airstrike"
-    if "explosion" in title_lower or "blast" in title_lower:
-        return "conflict_explosion"
-    if "protest" in title_lower or "demonstration" in title_lower:
-        return "social_protest"
-    if "riot" in title_lower:
-        return "social_riot"
-    if "kill" in title_lower or "murder" in title_lower or "assassination" in title_lower:
-        return "conflict_atrocity"
-    if "terror" in title_lower or "attack" in title_lower:
-        return "conflict_terror"
-    if "battle" in title_lower or "clash" in title_lower or "fighting" in title_lower:
-        return "conflict_battle"
+    Prioridad: subcategory API → category API → keywords de título (solo frases
+    inequívocas con límites de palabra para evitar falsos positivos).
 
+    Args:
+        category: Campo 'category' de la respuesta GDELT Cloud.
+        subcategory: Campo 'subcategory' de la respuesta GDELT Cloud.
+        title: Título del artículo (fallback conservador).
+
+    Returns:
+        Tipo de evento interno como string.
+    """
     if subcategory:
         mapped = GDELT_SUBCATEGORY_MAP.get(subcategory.upper())
         if mapped:
@@ -119,7 +143,25 @@ def _map_category(category: str | None, subcategory: str | None, title: str | No
         mapped = GDELT_CATEGORY_MAP.get(category.upper())
         if mapped:
             return mapped
+    if title:
+        matched = _match_title_keywords(title.lower())
+        if matched:
+            return matched
     return "conflict_unknown"
+
+
+def _derive_canonical_category(event_type: str) -> CategoryEnum:
+    """Deriva la categoría canónica a partir del tipo de evento interno.
+
+    Args:
+        event_type: Tipo de evento interno (p. ej. 'conflict_battle', 'social_protest').
+
+    Returns:
+        CategoryEnum correspondiente.
+    """
+    if event_type in ("social_protest", "social_riot"):
+        return CategoryEnum.OTHER
+    return CategoryEnum.CONFLICT
 
 
 def normalize_gdelt_event(event: dict[str, Any]) -> EventCanonicalCreate:
@@ -174,7 +216,7 @@ def normalize_gdelt_event(event: dict[str, Any]) -> EventCanonicalCreate:
         source="gdelt",
         event_time=event_date,
         event_type=event_type,
-        category=CategoryEnum.CONFLICT,
+        category=_derive_canonical_category(event_type),
         latitude=lat,
         longitude=lon,
         location_accuracy_km=None,

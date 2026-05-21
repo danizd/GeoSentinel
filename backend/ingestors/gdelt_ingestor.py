@@ -177,7 +177,7 @@ class GDELTCloudIngestor:
 
         while attempt < self.max_retries:
             try:
-                events = self.fetch_events(start_time, end_time)
+                events = self.fetch_events(start_time, end_time, has_fatalities=True)
                 break
             except requests.exceptions.Timeout:
                 attempt += 1
