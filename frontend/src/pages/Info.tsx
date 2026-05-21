@@ -176,12 +176,12 @@ export function Info() {
 
         <Section icon={<Map size={20} />} title="Controles del mapa">
           <div className="space-y-2 text-slate-300">
-            <p><strong className="text-text-primary">PUNTOS</strong> — Muestra los incidentes como círculos de colores.</p>
+            <p><strong className="text-text-primary">PUNTOS CON INCIDENCIAS</strong> — Muestra los incidentes como círculos de colores.</p>
             <p><strong className="text-text-primary">CALOR</strong> — Vista de calor: las zonas con más incidentes se ven más brillantes.</p>
-            <p><strong className="text-text-primary">ZONAS</strong> — Muestra las Áreas de Interés (OTAN con borde negro, otras con borde azul).</p>
-            <p><strong className="text-text-primary">VUELOS</strong> — Activa la capa de aviones militares en el cielo.</p>
-            <p><strong className="text-text-primary">BUQUES</strong> — Activa la capa de barcos en el mar.</p>
-            <p><strong className="text-text-primary">BASES</strong> — Muestra las instalaciones militares de EEUU en el extranjero (icono 🛡️).</p>
+            <p><strong className="text-text-primary">ZONAS EN CONFLICTO + OTAN</strong> — Muestra las Áreas de Interés (OTAN con borde negro, otras con borde azul).</p>
+            <p><strong className="text-text-primary">VUELOS MILITARES</strong> — Activa la capa de aviones militares en el cielo.</p>
+            <p><strong className="text-text-primary">BUQUES MILITARES</strong> — Activa la capa de barcos en el mar.</p>
+            <p><strong className="text-text-primary">BASES DE EEUU</strong> — Muestra las instalaciones militares de EEUU en el extranjero (icono 🛡️).</p>
             <p><strong className="text-text-primary">2D / 3D</strong> — Cambia entre mapa plano y globo terráqueo.</p>
             <p><strong className="text-text-primary">Click en un avión o barco</strong> — Muestra todos sus datos.</p>
             <p><strong className="text-text-primary">Click en un incidente</strong> — Lo selecciona y centra el mapa.</p>
