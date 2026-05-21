@@ -719,7 +719,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
               type="symbol"
               layout={{
                 'icon-image': 'incident-dot-icon',
-                'icon-size': ['interpolate', ['linear'], ['get', 'severity'], 0, 0.18, 10, 0.55],
+                'icon-size': ['interpolate', ['linear'], ['get', 'severity'], 0, 0.12, 10, 0.40],
                 'icon-allow-overlap': true,
                 'icon-ignore-placement': true,
                 'icon-pitch-alignment': 'map',
@@ -751,7 +751,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
               filter={selectedIncident ? ['==', ['get', 'id'], selectedIncident.incident_id] : ['==', ['get', 'id'], '']}
               layout={{
                 'icon-image': 'incident-ring-icon',
-                'icon-size': 1.0,
+                'icon-size': 0.75,
                 'icon-allow-overlap': true,
                 'icon-ignore-placement': true,
                 'icon-pitch-alignment': 'map',
