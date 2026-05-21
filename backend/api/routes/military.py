@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-RELAY_URL = os.getenv("MILITARY_RELAY_URL", "http://localhost:8000")
+RELAY_URL = os.getenv("MILITARY_RELAY_URL", "http://military-relay:8002")
 
 
 class Location(BaseModel):

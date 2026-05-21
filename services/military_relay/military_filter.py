@@ -87,9 +87,7 @@ def is_military(hex_code: Optional[str], callsign: Optional[str], category: int 
     """Determina si una aeronave es militar por cualquiera de los criterios
     disponibles, en orden de fiabilidad decreciente.
 
-    Prioridad: category==7 -> rango ICAO -> hex individual -> callsign+hex.
-    El callsign solo no es suficiente: requiere confirmacion de hex para evitar
-    falsos positivos con prefijos de 3 letras que coincidan con aerolineas civiles.
+    Prioridad: category==7 -> rango ICAO -> hex individual -> prefijo callsign.
 
     Args:
         hex_code: Codigo ICAO24 de la aeronave.
@@ -101,11 +99,11 @@ def is_military(hex_code: Optional[str], callsign: Optional[str], category: int 
     """
     if category == 7:
         return True
-    hex_confirmed = is_hex_military_by_range(hex_code) or is_hex_military(hex_code)
-    if hex_confirmed:
+    if is_hex_military_by_range(hex_code):
         return True
-    # Callsign actua como refuerzo solo si el hex ya confirma la aeronave
-    if is_callsign_military(callsign) and hex_confirmed:
+    if is_hex_military(hex_code):
+        return True
+    if is_callsign_military(callsign):
         return True
     return False
 
