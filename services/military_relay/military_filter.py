@@ -84,7 +84,6 @@ def is_hex_military_by_range(hex_code: Optional[str]) -> bool:
 
 
 def is_military(hex_code: Optional[str], callsign: Optional[str], category: int | None = None) -> bool:
-def is_military(hex_code: Optional[str], callsign: Optional[str], category: int | None = None) -> bool:
     """Determina si una aeronave es militar por cualquiera de los criterios
     disponibles, en orden de fiabilidad decreciente.
 
