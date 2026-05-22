@@ -91,7 +91,7 @@ def _try_download(date_str: str, timeout: int = 120) -> Optional[str]:
 def download_and_extract_military_hex(output_file: Path) -> int:
     """Descarga la BD de aeronaves de OpenSky y extrae los ICAO24 militares.
 
-    Intenta el mes actual y los dos anteriores como fallback. Escribe los
+    Intenta el mes actual y hasta 23 meses anteriores como fallback (el bucket S3 de OpenSky solo publica hasta ~2024-06). Escribe los
     resultados en output_file solo si se encontraron aeronaves; de lo contrario
     conserva el archivo existente sin modificarlo.
 
@@ -103,7 +103,7 @@ def download_and_extract_military_hex(output_file: Path) -> int:
     """
     now = datetime.now(timezone.utc)
     candidates: list[str] = []
-    for offset in range(3):
+    for offset in range(24):
         month = now.month - offset
         year = now.year
         while month <= 0:
