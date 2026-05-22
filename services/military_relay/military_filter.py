@@ -101,8 +101,6 @@ def is_military(hex_code: Optional[str], callsign: Optional[str], category: int 
     """
     if category == 7:
         return True
-    if is_hex_military_by_range(hex_code):
-        return True
     if is_hex_military(hex_code):
         return True
     return False
