@@ -25,7 +25,7 @@ from services.military_relay import config
 
 logger = logging.getLogger(__name__)
 
-OPENSKY_DB_BASE_URL = "https://opensky-network.org/datasets/metadata"
+OPENSKY_DB_BASE_URL = "https://s3.opensky-network.org/data-samples/metadata"
 
 # Palabras clave en categoryDescription que indican aeronave militar
 MILITARY_CATEGORY_KEYWORDS: frozenset[str] = frozenset({"military"})

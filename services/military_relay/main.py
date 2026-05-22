@@ -258,6 +258,26 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * c
 
 
+
+@app.get("/debug")
+async def debug_status():
+    """Endpoint de diagnostico: estado del relay, fichero hex y ultima llamada a OpenSky."""
+    from services.military_relay.military_filter import load_military_hex_set
+    hex_set = load_military_hex_set()
+    hex_file = config.MILITARY_HEX_FILE
+    return {
+        "military_hex_file": str(hex_file),
+        "hex_file_exists": hex_file.exists(),
+        "hex_file_size_bytes": hex_file.stat().st_size if hex_file.exists() else 0,
+        "hex_count": len(hex_set),
+        "hex_file_age_days": round(
+            (__import__("time").time() - hex_file.stat().st_mtime) / 86400, 1
+        ) if hex_file.exists() else None,
+        "military_source": config.MILITARY_SOURCE,
+        "opensky_authenticated": bool(config.OPENSKY_CLIENT_ID and config.OPENSKY_CLIENT_SECRET),
+        "cache_entries": len(bbox_cache._cache) if hasattr(bbox_cache, "_cache") else "n/a",
+    }
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "military_relay"}

@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import time as time_module
 import threading
 from datetime import datetime, timezone
@@ -131,16 +131,29 @@ class OpenskyClient:
         headers = self.token_manager.headers()
         logger.info(f"Fetching OpenSky states: lamin={lat_min} lamax={lat_max} lomin={lon_min} lomax={lon_max}")
 
+
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=30)
 
             if response.status_code == 429:
-                logger.warning("OpenSky rate limited - returning empty results")
+                logger.warning("OpenSky rate limited (429) - returning empty results")
+                return []
+
+            if response.status_code in (401, 403):
+                logger.error(
+                    f"OpenSky auth error ({response.status_code}) - "
+                    "configure OPENSKY_CLIENT_ID / OPENSKY_CLIENT_SECRET"
+                )
                 return []
 
             response.raise_for_status()
             data = response.json()
-            return data.get("states", [])
+            states = data.get("states") or []
+            logger.info(
+                f"OpenSky /states/all -> {len(states)} estados "
+                f"(bbox: lamin={lat_min} lamax={lat_max} lomin={lon_min} lomax={lon_max})"
+            )
+            return states
         except requests.exceptions.RequestException as e:
             logger.error(f"OpenSky request failed: {e}")
             raise
