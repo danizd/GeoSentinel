@@ -6,6 +6,9 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 
 ---
 
+![GeoSentinel Dashboard](Capturas/captura1.png)
+
+
 ## Estado de implementacion
 
 ### Implementado
@@ -17,7 +20,7 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 | **Ingestor USGS** | Pull polling cada 3 min, manejo de rate limiting 429, filtro `minmagnitude=4.0` |
 | **Ingestor GDELT** | API GDELT Cloud v2 (gdeltcloud.com/api/v2), ventana 5 min (max 29 dias), Bearer auth, analisis de titulo para event_type, deduplicacion por `globalEventId` |
 | **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicacion por `event_id`, categorias ACLED -> internal mapping |
-| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares usando BD mensual de OpenSky (replica filtro "U") + rangos hex ICAO + callsign prefixes. Actualización automática al arrancar. Rate limiting 1 req/s |
+| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares usando BD mensual de OpenSky (~10 000 entradas, replica filtro "U"). Sin rangos hex nacionales ni callsigns (generan falsos positivos). Actualización automática al arrancar. Rate limiting 1 req/s. Endpoint `/debug` para diagnóstico |
 | **API Vuelos Militares** | `GET /v1/military-flights` devuelve vuelos filtrados dentro de AOIs activos. Frontend: capas Mapbox nativas (symbol SDF ✈ + circle halo) |
 | **Normalizacion GDELT** | Mapper Events v2 a `EventCanonicalCreate`, CAMEO code -> category/event_type, deduplicacion por `globalEventId` |
 | **Normalizacion ACLED** | Mapper JSON a `EventCanonicalCreate`, clasificacion ACLED -> internal, deduplicacion por `event_id` |
@@ -137,7 +140,7 @@ El frontend queda disponible en `http://localhost:5173`.
 Para usar la funcionalidad de vuelos militares (requiere AOIs activos):
 
 ```bash
-# Terminal 3: Relay militar (OpenSky)
+| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares usando BD mensual de OpenSky (~10 000 entradas, replica filtro "U"). Sin rangos hex nacionales ni callsigns (generan falsos positivos). Actualización automática al arrancar. Rate limiting 1 req/s. Endpoint `/debug` para diagnóstico |
 $env:PYTHONPATH = "C:\Proyectos_local\GeoSentinel"
 $env:MILITARY_SOURCE = "opensky"
 $env:OPENSKY_CLIENT_ID = "tu_client_id"
@@ -145,7 +148,7 @@ $env:OPENSKY_CLIENT_SECRET = "tu_client_secret"
 python -m services.military_relay.main
 ```
 
-El relay escuchara en `http://localhost:8002`. Al arrancar descarga en background la base de
+El relay escuchara en `http://localhost:8002`. Al arrancar descarga en background la BD de aeronaves de OpenSky (2025-08, ~108 MB) para actualizar `data/military_hex.txt` si no existe, tiene mas de 30 dias o tiene menos de 1 000 entradas. Criterio: operator/owner militar (ver `MILITARY_OPERATOR_KEYWORDS`).
 datos de aeronaves de OpenSky (~200 MB) para actualizar `data/military_hex.txt` si tiene mas de 30 dias.
 
 ### 6c. Actualizar lista de aeronaves militares manualmente
@@ -157,7 +160,7 @@ $env:PYTHONPATH = "C:\Proyectos_local\GeoSentinel"
 python -m services.military_relay.update_military_db
 ```
 
-Descarga la BD mensual de OpenSky, extrae los ICAO24 militares (categoryDescription = Military
+Descarga la BD mensual de OpenSky (S3, hasta 2025-08), extrae los ICAO24 militares por operator/owner (~10 000 entradas) y sobreescribe `data/military_hex.txt`. Nota: en Docker siempre hacer `up -d --build military-relay` tras cambios de codigo.
 u operador/propietario militar) y sobreescribe `data/military_hex.txt` (~15 000 entradas).
 Replica el filtro "U" de `map.opensky-network.org`.
 ---
@@ -471,7 +474,7 @@ geosentinel/
 │   │   ├── usgs_ingestor.py     # Pull USGS GeoJSON (retry/backoff, mag>=4.0)
 │   │   ├── gdelt_ingestor.py    # Pull GDELT Cloud v2 (gdeltcloud.com, Bearer)
 │   │   ├── acled_ingestor.py    # Pull ACLED (OAuth2 Bearer, backfill 48h)
-│   │   └── military_ingestor.py # Pull desde relay militar (OpenSky via relay)
+| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares usando BD mensual de OpenSky (~10 000 entradas, replica filtro "U"). Sin rangos hex nacionales ni callsigns (generan falsos positivos). Actualización automática al arrancar. Rate limiting 1 req/s. Endpoint `/debug` para diagnóstico |
 │   ├── normalizers/
 │   │   ├── firms_mapper.py      # FIRMS row -> EventCanonicalCreate
 │   │   ├── usgs_mapper.py       # USGS feature -> EventCanonicalCreate
