@@ -27,42 +27,26 @@ logger = logging.getLogger(__name__)
 
 OPENSKY_DB_BASE_URL = "https://s3.opensky-network.org/data-samples/metadata"
 
-# Palabras clave en categoryDescription que indican aeronave militar
+# Solo aeronaves explicitamente etiquetadas como "Military" por OpenSky.
+# Esto replica exactamente el filtro "U" del mapa oficial (map.opensky-network.org).
+# No se usa operator/owner para evitar falsos positivos con contratistas y academias.
 MILITARY_CATEGORY_KEYWORDS: frozenset[str] = frozenset({"military"})
-
-# Palabras clave en operator / owner que indican organización militar.
-# Se usan substrings para cubrir variaciones idiomáticas.
-MILITARY_OPERATOR_KEYWORDS: frozenset[str] = frozenset({
-    "air force", "airforce", "navy", "army", "marines", "luftwaffe",
-    "military", "militaire", "fuerza aérea", "fuerza aerea",
-    "royal air force", "usaf", "usmc", "defence", "defense",
-    "bundeswehr", "armée", "armada", "ejército del aire", "ejercito del aire",
-    "aeronautica militare", "siły lotnicze", "force aérienne",
-    "marine nationale", "marina militar", "royal navy",
-    "coast guard", "guardia costera", "garde côtière",
-    "forces armées", "fuerzas armadas", "aeronautique militaire",
-    "aviation militaire", "heeresflieger", "marineflieger",
-    "exercito", "ejercito", "fuerza aerea",
-})
 
 
 def _is_military_row(row: dict) -> bool:
-    """Determina si una fila del CSV de OpenSky corresponde a una aeronave militar.
+    """Determina si una fila del CSV es una aeronave militar.
+
+    Criterio unico: categoryDescription contiene "military".
+    Replica el filtro "U" de map.opensky-network.org.
 
     Args:
-        row: Fila del CSV como dict (campos del aircraft database de OpenSky).
+        row: Fila del CSV como dict.
 
     Returns:
-        True si la aeronave es militar según categoría u operador/propietario.
+        True si categoryDescription indica aeronave militar.
     """
     category = row.get("categoryDescription", "").strip().lower()
-    if any(kw in category for kw in MILITARY_CATEGORY_KEYWORDS):
-        return True
-
-    operator = row.get("operator", "").strip().lower()
-    owner = row.get("owner", "").strip().lower()
-    combined = f"{operator} {owner}"
-    return any(kw in combined for kw in MILITARY_OPERATOR_KEYWORDS)
+    return "military" in category
 
 
 def _try_download(date_str: str, timeout: int = 120) -> Optional[str]:
