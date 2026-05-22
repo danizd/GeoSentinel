@@ -1,4 +1,4 @@
-"""Actualiza data/military_hex.txt descargando la base de datos de aeronaves de
+﻿"""Actualiza data/military_hex.txt descargando la base de datos de aeronaves de
 OpenSky Network y extrayendo todos los ICAO24 clasificados como militares.
 
 Criterios de clasificación:
@@ -177,31 +177,36 @@ def download_and_extract_military_hex(output_file: Path) -> int:
 def update_military_db_if_needed(
     output_file: Path,
     max_age_days: int = 30,
+    min_entries: int = 1000,
 ) -> bool:
-    """Actualiza military_hex.txt solo si no existe o supera max_age_days.
-
-    Diseñado para llamarse en el arranque del relay sin bloquear el servidor.
+    """Actualiza military_hex.txt si no existe, supera max_age_days, o tiene pocas entradas.
 
     Args:
         output_file: Ruta del fichero de hex codes militares.
-        max_age_days: Días máximos antes de forzar una actualización.
+        max_age_days: Dias maximos antes de forzar una actualizacion.
+        min_entries: Minimo de entradas esperadas; si el fichero tiene menos, se fuerza descarga.
 
     Returns:
         True si el fichero fue actualizado, False en caso contrario.
     """
     if output_file.exists():
+        entry_count = sum(1 for line in output_file.read_text(encoding="utf-8").splitlines() if line.strip())
         age_days = (
             datetime.now(timezone.utc).timestamp() - output_file.stat().st_mtime
         ) / 86400
-        if age_days < max_age_days:
+        if entry_count < min_entries:
             logger.info(
-                f"military_hex.txt tiene {age_days:.1f} días de antigüedad "
-                f"(umbral: {max_age_days}d) — no requiere actualización"
+                f"military_hex.txt tiene solo {entry_count} entradas (minimo: {min_entries}) — forzando actualizacion"
+            )
+        elif age_days < max_age_days:
+            logger.info(
+                f"military_hex.txt tiene {age_days:.1f} dias de antiguedad con {entry_count:,} entradas — no requiere actualizacion"
             )
             return False
-        logger.info(
-            f"military_hex.txt tiene {age_days:.1f} días — iniciando actualización"
-        )
+        else:
+            logger.info(
+                f"military_hex.txt tiene {age_days:.1f} dias ({entry_count:,} entradas) — iniciando actualizacion"
+            )
     else:
         logger.info("military_hex.txt no existe — descargando por primera vez")
 

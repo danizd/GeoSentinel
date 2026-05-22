@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ class MilitaryFlight(BaseModel):
     callsign: str
     hexCode: str = Field(..., description="Always uppercase")
     location: Location
-    altitude: int = Field(..., ge=0, description="feet")
+    altitude: int = Field(..., description="feet")
     heading: int = Field(..., ge=0, le=360, description="degrees 0-360")
     speed: int = Field(..., ge=0, description="knots")
     lastSeenAt: str = Field(..., description="ISO 8601 UTC")
