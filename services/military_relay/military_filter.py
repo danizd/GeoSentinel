@@ -84,14 +84,17 @@ def is_hex_military_by_range(hex_code: Optional[str]) -> bool:
 
 
 def is_military(hex_code: Optional[str], callsign: Optional[str], category: int | None = None) -> bool:
+def is_military(hex_code: Optional[str], callsign: Optional[str], category: int | None = None) -> bool:
     """Determina si una aeronave es militar por cualquiera de los criterios
     disponibles, en orden de fiabilidad decreciente.
 
-    Prioridad: category==7 -> rango ICAO -> hex individual -> prefijo callsign.
+    Prioridad: category==7 -> rango ICAO -> hex individual (BD OpenSky).
+    El filtro de callsign se omite deliberadamente: con 10 000+ hex codes de
+    la BD de OpenSky, los callsigns tacticos generan demasiados falsos positivos.
 
     Args:
         hex_code: Codigo ICAO24 de la aeronave.
-        callsign: Indicativo de vuelo.
+        callsign: Indicativo de vuelo (reservado para uso futuro).
         category: Categoria ADS-B (7 = militar segun estandar ICAO).
 
     Returns:
@@ -102,8 +105,6 @@ def is_military(hex_code: Optional[str], callsign: Optional[str], category: int 
     if is_hex_military_by_range(hex_code):
         return True
     if is_hex_military(hex_code):
-        return True
-    if is_callsign_military(callsign):
         return True
     return False
 
