@@ -157,65 +157,109 @@ function AircraftIconManager({ flights }: { flights: MilitaryFlight[] }) {
   }, [flights])
 
   if (!geojson) return null
+  if (!geojson) return null
 
   return (
-<Source id="military-flights-src" type="geojson" data={geojson}>
+    <Source
+      id="military-flights-src"
+      type="geojson"
+      data={geojson}
+      cluster={true}
+      clusterMaxZoom={13}
+      clusterRadius={45}
+    >
+      {/* Cluster: circulo de fondo */}
+      <Layer
+        id="military-cluster-circle"
+        type="circle"
+        source="military-flights-src"
+        filter={['has', 'point_count']}
+        paint={{
+          'circle-radius': ['step', ['get', 'point_count'], 14, 5, 18, 20, 22],
+          'circle-color': '#1E3A5F',
+          'circle-opacity': 0.85,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#60A5FA',
+          'circle-stroke-opacity': 0.9,
+        }}
+      />
+      {/* Cluster: numero de vuelos */}
+      <Layer
+        id="military-cluster-count"
+        type="symbol"
+        source="military-flights-src"
+        filter={['has', 'point_count']}
+        layout={{
+          'text-field': ['+get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+        }}
+        paint={{
+          'text-color': '#FFFFFF',
+        }}
+      />
+      {/* Vuelo individual: halo blanco */}
       <Layer
         id="military-flights-halo"
         type="circle"
         source="military-flights-src"
+        filter={['!', ['has', 'point_count']]}
         paint={{
-          'circle-radius': 12,
+          'circle-radius': 8,
           'circle-color': '#FFFFFF',
-          'circle-opacity': 0.5,
+          'circle-opacity': 0.45,
           'circle-stroke-width': 0,
         }}
       />
-		{/* Halo exterior coloreado */}
-		<Layer
-		  id="military-flights-halo-outer"
-		  type="circle"
-		  source="military-flights-src"
-		  paint={{
-			'circle-radius': 18,
-			'circle-color': ['get', 'color'],
-			'circle-opacity': 0.12,
-			'circle-stroke-width': 0,
-			'circle-blur': 1,
-		  }}
-		/>
-		{/* Anillo interior */}
-		<Layer
-		  id="military-flights-halo-ring"
-		  type="circle"
-		  source="military-flights-src"
-		  paint={{
-			'circle-radius': 11,
-			'circle-color': 'transparent',
-			'circle-opacity': 0,
-			'circle-stroke-width': 1.5,
-			'circle-stroke-color': ['get', 'color'],
-			'circle-stroke-opacity': 0.7,
-		  }}
-		/>
-		<Layer
-		  id="military-flights-symbol"
-		  type="symbol"
-		  source="military-flights-src"
-		  layout={{
-			'icon-image': 'airplane-icon',
-			'icon-size': 0.15,
-			'icon-allow-overlap': true,
-			'icon-ignore-placement': true,
-			'icon-rotate': ['get', 'heading'],
-			'icon-rotation-alignment': 'map',
-			'icon-pitch-alignment': 'map',
-		  }}
-		  paint={{
-			'icon-color': ['get', 'color'],
-			'icon-opacity': 1,
-		  }}
-		/>
+      {/* Vuelo individual: halo coloreado exterior */}
+      <Layer
+        id="military-flights-halo-outer"
+        type="circle"
+        source="military-flights-src"
+        filter={['!', ['has', 'point_count']]}
+        paint={{
+          'circle-radius': 12,
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.1,
+          'circle-stroke-width': 0,
+          'circle-blur': 1,
+        }}
+      />
+      {/* Vuelo individual: anillo interior */}
+      <Layer
+        id="military-flights-halo-ring"
+        type="circle"
+        source="military-flights-src"
+        filter={['!', ['has', 'point_count']]}
+        paint={{
+          'circle-radius': 8,
+          'circle-color': 'transparent',
+          'circle-opacity': 0,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': ['get', 'color'],
+          'circle-stroke-opacity': 0.7,
+        }}
+      />
+      {/* Vuelo individual: icono avion */}
+      <Layer
+        id="military-flights-symbol"
+        type="symbol"
+        source="military-flights-src"
+        filter={['!', ['has', 'point_count']]}
+        layout={{
+          'icon-image': 'airplane-icon',
+          'icon-size': 0.13,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'icon-rotate': ['get', 'heading'],
+          'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map',
+        }}
+        paint={{
+          'icon-color': ['get', 'color'],
+          'icon-opacity': 1,
+        }}
+      />
     </Source>
   )
 }
