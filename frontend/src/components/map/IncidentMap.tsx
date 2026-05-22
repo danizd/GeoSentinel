@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+﻿import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import Map, { NavigationControl, Source, Layer, type MapRef } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -860,7 +860,7 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
           </Source>
         )}
 
-        <NavigationControl position="top-right" />
+        <NavigationControl position="bottom-right" />
       </Map>
 
       <IncidentTooltip hover={hover} incidents={incidents} />
