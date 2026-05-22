@@ -17,7 +17,7 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 | **Ingestor USGS** | Pull polling cada 3 min, manejo de rate limiting 429, filtro `minmagnitude=4.0` |
 | **Ingestor GDELT** | API GDELT Cloud v2 (gdeltcloud.com/api/v2), ventana 5 min (max 29 dias), Bearer auth, analisis de titulo para event_type, deduplicacion por `globalEventId` |
 | **Ingestor ACLED** | OAuth2 Bearer token, backfill 48h, deduplicacion por `event_id`, categorias ACLED -> internal mapping |
-| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares por categoría 7 + 53 prefijos callsign + lista hex ICAO. Rate limiting 1 req/s |
+| **Relay Militar (OpenSky)** | Microservicio FastAPI en puerto 8002. Filtra vuelos militares usando BD mensual de OpenSky (replica filtro "U") + rangos hex ICAO + callsign prefixes. Actualización automática al arrancar. Rate limiting 1 req/s |
 | **API Vuelos Militares** | `GET /v1/military-flights` devuelve vuelos filtrados dentro de AOIs activos. Frontend: capas Mapbox nativas (symbol SDF ✈ + circle halo) |
 | **Normalizacion GDELT** | Mapper Events v2 a `EventCanonicalCreate`, CAMEO code -> category/event_type, deduplicacion por `globalEventId` |
 | **Normalizacion ACLED** | Mapper JSON a `EventCanonicalCreate`, clasificacion ACLED -> internal, deduplicacion por `event_id` |
@@ -138,16 +138,28 @@ Para usar la funcionalidad de vuelos militares (requiere AOIs activos):
 
 ```bash
 # Terminal 3: Relay militar (OpenSky)
-cd C:\Proyextos\GeoSentinel
-$env:PYTHONPATH = "C:\Proyextos\GeoSentinel"
+$env:PYTHONPATH = "C:\Proyectos_local\GeoSentinel"
 $env:MILITARY_SOURCE = "opensky"
 $env:OPENSKY_CLIENT_ID = "tu_client_id"
 $env:OPENSKY_CLIENT_SECRET = "tu_client_secret"
 python -m services.military_relay.main
 ```
 
-El relay escuchara en `http://localhost:8002` (o la URL configurada en `MILITARY_RELAY_URL`).
+El relay escuchara en `http://localhost:8002`. Al arrancar descarga en background la base de
+datos de aeronaves de OpenSky (~200 MB) para actualizar `data/military_hex.txt` si tiene mas de 30 dias.
 
+### 6c. Actualizar lista de aeronaves militares manualmente
+
+Para forzar una descarga y actualizacion inmediata de `data/military_hex.txt`:
+
+```bash
+$env:PYTHONPATH = "C:\Proyectos_local\GeoSentinel"
+python -m services.military_relay.update_military_db
+```
+
+Descarga la BD mensual de OpenSky, extrae los ICAO24 militares (categoryDescription = Military
+u operador/propietario militar) y sobreescribe `data/military_hex.txt` (~15 000 entradas).
+Replica el filtro "U" de `map.opensky-network.org`.
 ---
 
 ## Despliegue en produccion (Docker)
@@ -467,7 +479,10 @@ geosentinel/
 │   │   └── acled_mapper.py      # ACLED JSON -> EventCanonicalCreate
 ├── services/
 │   ├── military_relay/          # Relay FastAPI para flights militares (OpenSky)
-│   │   └── main.py              # Servidor en puerto 8002
+│   │   ├── main.py              # Servidor en puerto 8002
+│   │   ├── update_military_db.py # Descarga BD OpenSky y actualiza military_hex.txt
+│   │   ├── military_filter.py   # is_military(): hex ranges + hex file + callsign
+│   │   └── config.py            # Prefijos callsign, rangos hex ICAO, rutas
 │   └── ais_relay/               # Relay FastAPI para buques AIS (AISStream/mock)
 │       ├── main.py              # Servidor en puerto 8003
 │       ├── config.py

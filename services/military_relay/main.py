@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import time as time_module
 import threading
 from datetime import datetime, timezone
@@ -50,6 +50,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _background_db_update() -> None:
+    """Actualiza military_hex.txt en background sin bloquear el arranque del relay."""
+    try:
+        from services.military_relay.update_military_db import update_military_db_if_needed
+        from services.military_relay.military_filter import load_military_hex_set, _compiled_ranges
+
+        updated = update_military_db_if_needed(config.MILITARY_HEX_FILE)
+        if updated:
+            load_military_hex_set.cache_clear()
+            _compiled_ranges.cache_clear()
+            logger.info("Cache de hex militares recargada tras actualizacion de BD")
+    except Exception as exc:
+        logger.error(f"Error en actualizacion de BD militar en background: {exc}")
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Lanza la actualizacion de la BD de aeronaves militares en un hilo daemon."""
+    threading.Thread(
+        target=_background_db_update,
+        daemon=True,
+        name="military-db-update",
+    ).start()
+    logger.info("Relay militar iniciado — actualizacion de BD lanzada en background")
 
 
 @app.get("/api/military/v1/list-military-flights")

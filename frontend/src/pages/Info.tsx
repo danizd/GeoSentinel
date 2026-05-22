@@ -123,12 +123,55 @@ export function Info() {
             y se muestran sobre el mapa.
           </p>
           <p className="text-slate-300 leading-relaxed mb-3">
-            Los vuelos militares se identifican por su código de identificación o por patrones en su señal de radio.
+            Los vuelos militares se identifican cruzando la señal ADS-B en tiempo real con la base de datos
+            de aeronaves de OpenSky Network — la misma fuente que usa el filtro "U" del mapa oficial de OpenSky.
             Los barcos se rastrean por el sistema AIS, obligatorio para la navegación.
           </p>
           <p className="text-slate-300 leading-relaxed mb-3">
             El mapa usa tecnología de Mapbox y puede verse en modo 2D (callejero) o 3D (globo terráqueo).
             Los datos se actualizan automáticamente cada 30 segundos.
+          </p>
+        </Section>
+
+        <Section icon={<Shield size={20} />} title="¿Cómo se detectan los vuelos militares?">
+          <p className="text-slate-300 leading-relaxed mb-3">
+            GeoSentinel replica el filtro <strong className="text-text-primary">"U"</strong> del
+            mapa oficial de OpenSky (<em>map.opensky-network.org</em>). Cada aeronave se clasifica
+            como militar si cumple <strong className="text-text-primary">al menos uno</strong> de estos criterios,
+            evaluados en orden de fiabilidad:
+          </p>
+          <ol className="list-decimal list-inside space-y-3 text-slate-300 mb-4">
+            <li>
+              <strong className="text-text-primary">Base de datos OpenSky</strong> — Al arrancar,
+              el relay descarga la base de datos mensual de aeronaves de OpenSky Network y extrae todos los
+              ICAO24 donde <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">categoryDescription = "Military"</code> u
+              operador/propietario contiene palabras clave militares (Air Force, Navy, Luftwaffe, Armée, etc.).
+              Resultado: ~15 000 hex codes actualizados mensualmente.
+            </li>
+            <li>
+              <strong className="text-text-primary">Rangos hex ICAO oficiales</strong> — 20 bloques de
+              códigos ICAO24 asignados a fuerzas armadas nacionales: USAF/USN (AE0000–AFFFFF),
+              RAF (43C000–43CFFF), OTAN/Bélgica (44C000–44CFFF), y otros 17 ejércitos aliados.
+            </li>
+            <li>
+              <strong className="text-text-primary">Categoría ADS-B 7</strong> — Aeronaves que se
+              autoidentifican como militares en el transponder (poco común pero 100 % fiable).
+            </li>
+            <li>
+              <strong className="text-text-primary">Prefijos de callsign</strong> — Más de 90 prefijos
+              verificados: <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">REACH</code>,{' '}
+              <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">RCH</code>,{' '}
+              <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">MOOSE</code>,{' '}
+              <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">EVAC</code>,{' '}
+              <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">GAF</code>,{' '}
+              <code className="text-accent-blue text-xs bg-bg-panel px-1 rounded">RAF</code>, etc.
+              Complementa la cobertura para aeronaves cuyo hex no está en ninguna lista.
+            </li>
+          </ol>
+          <p className="text-slate-300 leading-relaxed">
+            La base de datos se actualiza automáticamente cada 30 días al arrancar el relay.
+            La actualización ocurre en segundo plano: el servicio está disponible de inmediato con la lista anterior
+            mientras la descarga se completa.
           </p>
         </Section>
 

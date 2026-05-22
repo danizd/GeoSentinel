@@ -1,4 +1,4 @@
-# F-ING-MIL — Ingestor Vuelos Militares
+﻿# F-ING-MIL — Ingestor Vuelos Militares
 
 > Cargar junto con: `E-ARCH` + `E-SOURCES §2.5` + `E-SOURCES §2.5-MIL`
 > + `E-SEC` + `F-NORM-CANON` + `F-DEDUP`
@@ -29,50 +29,69 @@ Cuenta de OpenSky: `https://opensky-network.org/my-opensky/account`
 
 ## 2. Filtro de militaridad (implementado en el relay)
 
-### Regla base
-Conservar el vuelo si se cumple **cualquiera** de:
-- **Categoría 7 de OpenSky** (`category == 7`) — marcador nativo de vuelo militar
-- callsign coincide con patrón militar conocido
-- hex ICAO pertenece a lista militar conocida
+### Fuente primaria: base de datos OpenSky Network
 
-El filtro por categoría 7 captura todos los vuelos que OpenSky clasifica como militares, sin depender de patrones de callsign. Los patrones de callsign y la lista de hex son complementos.
+El relay descarga mensualmente la base de datos oficial de aeronaves de OpenSky
+(`aircraft-database-complete-YYYY-MM.csv`) y extrae todos los ICAO24 militares.
+**Esto replica exactamente el filtro "U" del mapa oficial `map.opensky-network.org`.**
 
-### Patrones de callsign
+La descarga y extraccion se realiza en `services/military_relay/update_military_db.py`.
+El proceso arranca en background al iniciar el relay (`@app.on_event("startup")`);
+el servicio queda disponible inmediatamente con la lista preexistente mientras
+la descarga se completa. El fichero se actualiza solo si tiene mas de 30 dias.
 
-**Prefijos largos** (match directo):
+**Criterios de extraccion del CSV:**
 ```python
-MILITARY_CALLSIGN_PREFIXES_FULL = [
-    # USA / NATO
-    "RCH", "REACH", "MOOSE", "EVAC", "DUSTOFF",
-    "VIPER", "RAPTOR", "SENTRY", "AWACS", "COBRA", "PYTHON",
-    "NAVY", "USAF", "USN", "USMC", "NATO", "RAF",
-    # Países europeos
-    "FAF", "GAF", "AME", "ITAF", "PLF", "TUAF", "RFR",
-    "SVF", "NAF", "BAF", "HAF", "ROF", "HUAF", "DAF",
-    # Commonwealth / otros
-    "CFC", "RCAF", "ASF", "IAF", "VKS", "PLAAF",
-    # Tácticos / ejercicios
-    "BLUE", "RED", "GOLD",
-    "LION", "MACE", "SABER", "STORM", "THNDR",
-    "DEMON", "HAWK", "EAGLE", "FALCON", "HORNET",
-    "RAVEN", "DRAGON", "PHANTOM", "TIGER", "WOLF",
-    "SPAR", "HKY", "CNV", "VV",
-]
+def _is_military_row(row: dict) -> bool:
+    category = row.get("categoryDescription", "").strip().lower()
+    if "military" in category:
+        return True
+    combined = row.get("operator","").lower() + " " + row.get("owner","").lower()
+    return any(kw in combined for kw in MILITARY_OPERATOR_KEYWORDS)
 ```
 
-**Prefijos cortos** (solo si van seguidos de dígitos):
-```python
-MILITARY_CALLSIGN_PREFIXES_SHORT = [
-    "AE", "RF", "TF", "PAT", "SAM",
-    "OPS", "CTF", "IRG", "TAF",
-]
-# Regex: ^(AE|RF|TF|PAT|SAM|OPS|CTF|IRG|TAF)\d+
-```
+`MILITARY_OPERATOR_KEYWORDS`: air force, navy, army, marines, luftwaffe, military,
+militaire, royal air force, usaf, usmc, bundeswehr, armee, aeronautica militare,
+marine nationale, guardia costera, coast guard, etc.
 
-### Hex ICAO militar
-- Mantener lista conocida en `data/military_hex.txt` (una entrada por línea)
-- Normalizar siempre a **MAYÚSCULAS** antes de comparar y antes de cachear
-- La lista debe ser actualizable sin redespliegue (fichero externo, no hardcoded)
+### Regla base en `is_military()`
+
+Conservar el vuelo si se cumple **cualquiera** de (orden de fiabilidad):
+
+| Prioridad | Criterio | Resolucion |
+|-----------|----------|------------|
+| 1+2 | categoryDescription o operador/propietario militares en BD OpenSky | military_hex.txt generado por update_military_db.py |
+| 3 | Rango hex ICAO oficial de FF.AA. nacionales | MILITARY_HEX_RANGES en config.py |
+| 4 | Categoria ADS-B = 7 (autoidentificacion en transponder) | campo category del vector de estado |
+| 5 | Prefijo callsign verificado (>90 prefijos) | CALLSIGN_PREFIXES_FULL/SHORT en config.py |
+
+Los criterios 1 y 2 se resuelven via military_hex.txt (generado desde la BD OpenSky).
+Los criterios 3-5 actuan como complemento para aeronaves no registradas aun en la BD.
+
+### Rangos hex ICAO (criterio 3)
+
+20 bloques asignados a FF.AA. nacionales en `config.MILITARY_HEX_RANGES`:
+USA/USAF (AE0000-AFFFFF), Canada RCAF (C00000-C07FFF), Francia (3A0000-3AFFFF),
+RAF/Royal Navy (43C000-43CFFF), Rusia VKS (01C000-01FFFF), Israel IAF (E4E000-E4EFFF),
+Luftwaffe (3C4000-3C7FFF), Ejercito del Aire ES (340000-347FFF),
+Aeronautica Militare IT (300000-303FFF), Belgica/NATO AWACS (44C000-44CFFF), etc.
+
+### Patrones de callsign (criterio 5)
+
+**Prefijos largos** (>90 entradas en `CALLSIGN_PREFIXES_FULL`):
+REACH, RCH, MOOSE, EVAC, DUSTOFF, VIPER, RAPTOR, SENTRY, AWACS,
+NAVY, USAF, USN, USMC, NATO, RAF, IAF, VKS, PLAAF, FAF, GAF, AME, ITAF,
+PLF, BAF, RCAF, RRR, RFF, MMF, UAF, DOD, y mas de 60 codigos adicionales.
+
+**Prefijos cortos** (solo si van seguidos de digitos):
+AE, RF, TF, PAT, SAM, OPS, CTF, IRG, TAF
+Regex: ^(AE|RF|TF|PAT|SAM|OPS|CTF|IRG|TAF)\d+
+
+### `data/military_hex.txt`
+- Generado automaticamente por `update_military_db.py` (no editar manualmente)
+- Una entrada por linea, MAYUSCULAS, 6 caracteres hex
+- ~15 000 entradas tras la primera descarga completa de la BD OpenSky
+- Actualizable sin redespliegue: el relay recarga el fichero en memoria con `lru_cache`
 
 ## 3. Modelo canónico de vuelo militar
 
