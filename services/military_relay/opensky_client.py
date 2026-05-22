@@ -220,13 +220,6 @@ class OpenskyClient:
             aircraft_model = None
             registration = None
             operator_name = None
-            if hex_code:
-                meta = self.fetch_aircraft_metadata(hex_code)
-                if meta:
-                    aircraft_type = meta.get("typecode")
-                    aircraft_model = meta.get("model")
-                    registration = meta.get("registration")
-                    operator_name = meta.get("operator")
 
             flight_id = f"{hex_code.upper()}:{int(datetime.fromisoformat(last_seen_iso).timestamp())}"
 
