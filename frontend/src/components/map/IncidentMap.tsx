@@ -204,7 +204,7 @@ function AircraftIconManager({ flights }: { flights: MilitaryFlight[] }) {
 		  source="military-flights-src"
 		  layout={{
 			'icon-image': 'airplane-icon',
-			'icon-size': 0.22,
+			'icon-size': 0.15,
 			'icon-allow-overlap': true,
 			'icon-ignore-placement': true,
 			'icon-rotate': ['get', 'heading'],
