@@ -101,6 +101,44 @@ function fmtDate(iso: string | null): string {
   return date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC'
 }
 
+/** Días transcurridos desde la fecha del evento (granularidad día, sin desvíos de TZ). */
+function eventAgeDays(iso: string | null): number | null {
+  if (!iso) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return null
+  const day = Date.UTC(+m[1], +m[2] - 1, +m[3])
+  const now = new Date()
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((today - day) / 86400000)
+}
+
+/** Línea de fecha para tooltip: "Hoy · 25 ago 2026", "Ayer · 24 ago 2026", "22 ago 2026 · hace 3 días". */
+function eventDateLine(iso: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '')
+  if (!m) return '—'
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+  const dateStr = d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  const age = eventAgeDays(iso)
+  if (age === 0) return `Hoy · ${dateStr}`
+  if (age === 1) return `Ayer · ${dateStr}`
+  if (age !== null && age > 1) return `${dateStr} · hace ${age} días`
+  return dateStr
+}
+
+/** Factor de escala visual por antigüedad (1 = hoy → 0.78 a los 3 días; lineal). */
+function ageFactor(age: number): number {
+  if (age <= 0) return 1
+  if (age >= 3) return 0.78
+  return 1 - (age / 3) * 0.22
+}
+
+/** Opacidad por antigüedad (1 = hoy → 0.5 a los 3 días; lineal). */
+function ageAlpha(age: number): number {
+  if (age <= 0) return 1
+  if (age >= 3) return 0.5
+  return 1 - (age / 3) * 0.5
+}
+
 /** Id de imagen en Mapbox para un icono de CR360 (solo caracteres seguros). */
 function iconImageId(publicId: string): string {
   return 'cr360-icon-' + publicId.replace(/[^a-zA-Z0-9]/g, '-')
@@ -166,6 +204,7 @@ function EventTooltip({ hover, events }: { hover: HoverState; events: Cr360Event
         <span className="text-text-primary font-bold text-xs leading-tight">{feature.properties.title}</span>
       </div>
       <div className="text-text-secondary mt-1">{meta.name}</div>
+      <div className="text-text-secondary mt-0.5">{eventDateLine(feature.properties.date)}</div>
     </motion.div>
   )
 }
@@ -344,7 +383,7 @@ function EventModal({ eventId, onClose }: { eventId: number; onClose: () => void
             )}
 
             <div className="border-t border-border-glow pt-1.5 space-y-0.5">
-              <Row label="Fecha">{fmtDate(detail.date || detail.createdAt)}</Row>
+              <Row label="Fecha">{detail.date ? eventDateLine(detail.date) : fmtDate(detail.createdAt)}</Row>
               <Row label="Status">
                 <span className="text-accent-green">{detail.status || '—'}</span>
               </Row>
@@ -664,6 +703,9 @@ export function Radar() {
         alert: f.properties.alertHours != null,
         icon: iconImageId(f.properties.iconPublicId!),
         color: countryMeta(f.properties.countryCode).color,
+        age: eventAgeDays(f.properties.date) ?? 99,
+        size: ageFactor(eventAgeDays(f.properties.date) ?? 99),
+        alpha: ageAlpha(eventAgeDays(f.properties.date) ?? 99),
       },
       geometry: f.geometry,
     })),
@@ -679,6 +721,10 @@ export function Radar() {
         title: f.properties.title,
         color: countryMeta(f.properties.countryCode).color,
         alert: f.properties.alertHours != null,
+        // Énfasis temporal: tamaño/opacidad según la antigüedad del evento.
+        age: eventAgeDays(f.properties.date) ?? 99,
+        size: ageFactor(eventAgeDays(f.properties.date) ?? 99),
+        alpha: ageAlpha(eventAgeDays(f.properties.date) ?? 99),
         // Con icono cargado el punto queda oculto bajo el icono; solo se pinta
         // el punto para eventos sin icono (fallback).
         hasIcon: !!f.properties.iconPublicId && loadedIcons.has(f.properties.iconPublicId),
@@ -895,12 +941,12 @@ export function Radar() {
                 source="radar-events-src"
                 filter={['!', ['get', 'hasIcon']]}
                 paint={{
-                  'circle-radius': ['case', ['get', 'alert'], 9, 7],
+                  'circle-radius': ['*', ['case', ['get', 'alert'], 9, 7], ['get', 'size']],
                   'circle-color': ['get', 'color'],
-                  'circle-opacity': 0.9,
+                  'circle-opacity': ['*', 0.9, ['get', 'alpha']],
                   'circle-stroke-width': 1.5,
                   'circle-stroke-color': '#ffffff',
-                  'circle-stroke-opacity': 0.9,
+                  'circle-stroke-opacity': ['*', 0.9, ['get', 'alpha']],
                 }}
               />
             </Source>
@@ -914,12 +960,14 @@ export function Radar() {
                 source="radar-events-icon-src"
                 layout={{
                   'icon-image': ['get', 'icon'],
-                  'icon-size': ['case', ['get', 'alert'], 0.55, 0.42],
+                  'icon-size': ['*', ['case', ['get', 'alert'], 0.55, 0.42], ['get', 'size']],
                   'icon-allow-overlap': true,
                   'icon-ignore-placement': true,
+                  // Los eventos de hoy quedan por encima de los anteriores (sort key mayor).
+                  'symbol-sort-key': ['-', 0, ['get', 'age']],
                 }}
                 paint={{
-                  'icon-opacity': 1,
+                  'icon-opacity': ['get', 'alpha'],
                 }}
               />
               {/* Anillo de color del país alrededor del icono (distintivo de país) */}
@@ -928,11 +976,11 @@ export function Radar() {
                 type="circle"
                 source="radar-events-icon-src"
                 paint={{
-                  'circle-radius': ['case', ['get', 'alert'], 28.5, 22.5],
+                  'circle-radius': ['*', ['case', ['get', 'alert'], 28.5, 22.5], ['get', 'size']],
                   'circle-color': 'transparent',
                   'circle-stroke-width': 1.5,
                   'circle-stroke-color': '#000000',
-                  'circle-stroke-opacity': 0.8,
+                  'circle-stroke-opacity': ['*', 0.8, ['get', 'alpha']],
                 }}
               />
               <Layer
@@ -940,11 +988,11 @@ export function Radar() {
                 type="circle"
                 source="radar-events-icon-src"
                 paint={{
-                  'circle-radius': ['case', ['get', 'alert'], 27, 21],
+                  'circle-radius': ['*', ['case', ['get', 'alert'], 27, 21], ['get', 'size']],
                   'circle-color': 'transparent',
                   'circle-stroke-width': 2.5,
                   'circle-stroke-color': ['get', 'color'],
-                  'circle-stroke-opacity': 0.95,
+                  'circle-stroke-opacity': ['*', 0.95, ['get', 'alpha']],
                 }}
               />
             </Source>
