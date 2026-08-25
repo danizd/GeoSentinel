@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.api.routes import incidents, aoi, corrections, health, seed, military, ais, admin
+from backend.api.routes import incidents, aoi, corrections, health, seed, military, ais, admin, cr360
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.include_router(corrections.router, prefix="/v1", tags=["corrections"])
 app.include_router(military.router, prefix="/v1", tags=["military"])
 app.include_router(ais.router, prefix="/v1", tags=["ais"])
 app.include_router(admin.router, prefix="/v1", tags=["admin"])
+app.include_router(cr360.router, prefix="/v1", tags=["cr360"])
 
 
 @app.get("/")

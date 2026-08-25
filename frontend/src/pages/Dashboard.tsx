@@ -6,8 +6,9 @@ import { IncidentMap } from '../components/map/IncidentMap'
 import { IncidentList } from '../components/panels/IncidentList'
 import { IncidentDetail } from '../components/panels/IncidentDetail'
 import { RefreshPanel } from '../components/panels/RefreshPanel'
-import { AlertTriangle, Activity, Database, ChevronDown, RefreshCw, List, X, Menu } from 'lucide-react'
+import { AlertTriangle, Activity, Database, ChevronDown, RefreshCw, List, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { RADAR_TITLE } from '../api/cr360'
 
 const ACTIVE_SOURCES = [
   { name: 'USGS', label: 'USGS', desc: 'Terremotos >= 4.0M' },
@@ -67,12 +68,20 @@ export function Dashboard() {
           <span className="font-mono text-lg font-bold tracking-wider sm:hidden">GS</span>
         </div>
 
-        <Link
-          to="/info"
-          className="text-xs text-white hover:text-white transition-colors font-medium"
-        >
-          INFO
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/radar"
+            className="text-xs text-white hover:text-white transition-colors font-medium border border-accent-blue/30 rounded px-2 py-1 bg-accent-blue/10 hover:bg-accent-blue/20"
+          >
+            {RADAR_TITLE}
+          </Link>
+          <Link
+            to="/info"
+            className="text-xs text-white hover:text-white transition-colors font-medium"
+          >
+            INFO
+          </Link>
+        </div>
 
         <div className="flex items-center gap-2 md:gap-4">
           <div className="hidden lg:flex gap-1">

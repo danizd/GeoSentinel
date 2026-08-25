@@ -6,9 +6,12 @@ from fastapi.testclient import TestClient
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "backend"))
+ROOT = Path(__file__).resolve().parent.parent.parent
+for _p in (str(ROOT), str(ROOT / "backend")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-from main import app
+from backend.api.main import app
 
 
 @pytest.fixture
@@ -18,7 +21,7 @@ def client():
 
 class TestAdminRoutes:
 
-    @patch("api.routes.admin.run_single_job")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_usgs_returns_202(self, mock_run, client):
         mock_run.return_value = MagicMock()
         response = client.post("/v1/admin/run/usgs")
@@ -29,42 +32,42 @@ class TestAdminRoutes:
         assert "job_id" in data
         assert "started_at" in data
 
-    @patch("api.routes.admin.run_single_job")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_firms_returns_202(self, mock_run, client):
         mock_run.return_value = MagicMock()
         response = client.post("/v1/admin/run/firms")
         assert response.status_code == 202
         assert response.json()["job"] == "firms"
 
-    @patch("api.routes.admin.run_single_job")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_gdelt_returns_202(self, mock_run, client):
         mock_run.return_value = MagicMock()
         response = client.post("/v1/admin/run/gdelt")
         assert response.status_code == 202
         assert response.json()["job"] == "gdelt"
 
-    @patch("api.routes.admin.run_single_job")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_acled_returns_202(self, mock_run, client):
         mock_run.return_value = MagicMock()
         response = client.post("/v1/admin/run/acled")
         assert response.status_code == 202
         assert response.json()["job"] == "acled"
 
-    @patch("api.routes.admin.run_single_job")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_clustering_returns_202(self, mock_run, client):
         mock_run.return_value = MagicMock()
         response = client.post("/v1/admin/run/clustering")
         assert response.status_code == 202
         assert response.json()["job"] == "clustering"
 
-    @patch("api.routes.admin.run_single_job")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_lifecycle_returns_202(self, mock_run, client):
         mock_run.return_value = MagicMock()
         response = client.post("/v1/admin/run/lifecycle")
         assert response.status_code == 202
         assert response.json()["job"] == "lifecycle"
 
-    @patch("api.routes.admin.run_all_jobs")
+    @patch("backend.api.routes.admin._background_job")
     def test_run_all_returns_202(self, mock_run_all, client):
         mock_run_all.return_value = MagicMock()
         response = client.post("/v1/admin/run/all")
@@ -81,7 +84,7 @@ class TestAdminRoutes:
 
     def test_get_status_returns_correct_contract(self, client):
         job_id = str(uuid4())
-        from api.routes.admin import JOBS
+        from backend.api.routes.admin import JOBS
         import asyncio
 
         async def _setup():
@@ -121,7 +124,7 @@ class TestAdminRoutes:
 
     def test_get_status_failed_job_includes_error(self, client):
         job_id = str(uuid4())
-        from api.routes.admin import JOBS
+        from backend.api.routes.admin import JOBS
         import asyncio
 
         async def _setup():
@@ -144,7 +147,7 @@ class TestAdminRoutes:
         assert data["status"] == "failed"
         assert data["error"] == "Connection timeout after 30s"
 
-    @patch("api.routes.admin._get_running_job")
+    @patch("backend.api.routes.admin._get_running_job")
     def test_concurrent_run_same_job_returns_409(self, mock_running, client):
         mock_running.return_value = {
             "job_id": "existing-job-id",

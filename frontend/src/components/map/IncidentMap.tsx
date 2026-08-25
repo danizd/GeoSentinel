@@ -740,21 +740,6 @@ export function IncidentMap({ incidents }: IncidentMapProps) {
     setSelectedVessel(null)
   }
 
-  const INCIDENT_CATEGORY_COLORS = [
-    'match', ['get', 'category'],
-    'conflict', '#ef4444',
-    'wildfire', '#f97316',
-    'earthquake', '#a855f7',
-    'disaster_natural', '#06b6d4',
-    'mobility', '#38bdf8',
-    'humanitarian', '#fbbf24',
-    'thermal_anomaly', '#ea580c',
-    'crime', '#a855f7',
-    'protest', '#ec4899',
-    'other', '#64748b',
-    '#38bdf8',
-  ]
-
   return (
     <div className="relative w-full h-full">
       <Map

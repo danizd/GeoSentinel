@@ -19,6 +19,7 @@
 | MarineTraffic | `sensor` | Actividad naval enriquecida | Medio (comercial) |
 | Liveuamap | `media_derived` | Detección rápida conflictos | **Alto** (sin API pública) |
 | ReliefWeb | `field_reported` | Contexto humanitario | Bajo |
+| CR360 (Conflict Radar 360) | `media_derived` | Radar de conflictos OSINT (página `/radar`, **fuera del pipeline canónico**) | Medio (licencia no verificada, rate limit) |
 
 ---
 
@@ -576,6 +577,35 @@ AIS_POLL_EVENTS_MS=5000
 - **Alternativas a evaluar**: Bellingcat, NATO crisis monitors, fuentes OSINT
   con API documentada.
 
+### 2.10 CR360 — Conflict Radar 360 (radar de eventos y carreteras)
+
+- **Sitio**: `https://www.conflictradar360.com/`
+- **Base API**: `https://cr360-api.vercel.app/api/v2`
+- **⚠️ CORS (verificado)**: la API **no puede llamarse desde el navegador**.
+  - Con header `Origin` de navegador responde `500`.
+  - Sin `Origin` responde `200` pero sin `Access-Control-Allow-Origin`.
+  - El preflight `OPTIONS` devuelve `500`.
+  - **Todo el tráfico debe pasar por el proxy propio** `GET /v1/cr360/*` (ver `F-UI-*` radar).
+- **Endpoints**:
+  - `GET /public/map/events?lang=es&maxHours=72` — FeatureCollection mundial de eventos (puntos). Sin filtro server-side por país (parámetro `countryCode` ignorado, verificado) → filtrar en el proxy.
+  - `GET /events/{id}?lang=es` — detalle completo de un evento (media, enlaces, fuerza, confianza). Público, sin auth.
+  - `GET /public/map/compromised-roads?lang=es` — FeatureCollection de carreteras comprometidas (LineString). `maxHours` no tiene efecto (dataset estático).
+  - `GET /public/map/regions?lang=es` — FeatureCollection mundial de **regiones** (polígonos `Polygon`/`MultiPolygon`): **~10.600 features / ~15 MB** (verificado). Sin filtro server-side ni ventana temporal. España ~209 regiones, Ucrania ~101, **Rusia 0** (ago 2026). Misma caché en memoria (15 MB) + filtrado por `countryCode` en el proxy.
+- **Filtrado por país**: `countryCode` ISO-3 en `properties` (ESP/RUS/UKR...). El proxy recibe `?countries=ESP,RUS,UKR` y valida formato `^[A-Z]{3}(,[A-Z]{3})*$`.
+- **Rate limit upstream**: `X-Ratelimit-Limit: 100` (verificado). El proxy cachea en memoria (TTL por defecto 3 h) para no quemarlo con los detalles por click.
+- **Media (CDN verificado)**: `publicId` tipo `cr360/g4jxr6vvgmd8ozh4xvbb` → `https://res.cloudinary.com/dmmlghevj/image/upload/f_auto,q_auto/<publicId>` (Cloudinary). Los iconos (`cr360/icons/<id>`) usan el mismo patrón.
+- **Frecuencia**: la página `/radar` hace polling cada 3 h (configurable `VITE_POLL_CR360_MS`); el proxy reutiliza su caché para no llamar upstream más de 1 vez por TTL.
+- **Licencia**: **no documentada / no verificada**. Uso bajo responsabilidad del operador; requiere atribución prudente.
+- **Fuera del pipeline canónico**: CR360 alimenta la página `/radar` directamente (no pasa por `events_canonical`, dedup, clustering ni quarantine).
+
+### 2.11 Natural Earth — fronteras estáticas (dominio público)
+
+- **Origen**: Natural Earth 1:10m admin-0 countries (`ne_10m_admin_0_countries.geojson`), dominio público.
+- **Uso**: remarcar los límites nacionales en el radar (p. ej. frontera de Ucrania). No es una API en vivo: es un asset estático.
+- **Asset**: `frontend/public/geojson/ukraine-border.geojson` — feature extraída (MultiPolygon, incluye Crimea), ~58 KB, servida por Vite en `/geojson/ukraine-border.geojson`.
+- **Actualización**: manual; re-extraer de Natural Earth si cambia la frontera.
+- **Licencia**: dominio público (Natural Earth). Atribución recomendada.
+
 ### 2.9 ReliefWeb API
 
 - **Endpoint base**: `https://api.reliefweb.int/v1/`
@@ -644,6 +674,12 @@ RELIEFWEB_APP_NAME=
 # Liveuamap (opcional, desactivable)
 LIVEUAMAP_ENABLED=false
 LIVEUAMAP_API_KEY=
+
+# CR360 (Conflict Radar 360) — proxy de la página /radar
+CR360_BASE_URL=https://cr360-api.vercel.app
+CR360_CACHE_TTL_SECONDS=10800
+CR360_UPSTREAM_TIMEOUT_SECONDS=15
+CR360_EVENTS_MAX_HOURS=72
 
 # Configuración del relay militar
 MILITARY_SOURCE=opensky
