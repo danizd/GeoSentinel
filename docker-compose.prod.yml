@@ -52,6 +52,9 @@ services:
       args:
         - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
         - VITE_DEFAULT_SCOPES=${VITE_DEFAULT_SCOPES}
+        - VITE_CR360_COUNTRIES=${VITE_CR360_COUNTRIES}
+        - VITE_RADAR_TITLE=${VITE_RADAR_TITLE}
+        - VITE_POLL_CR360_MS=${VITE_POLL_CR360_MS}
     container_name: geosentinel-frontend
     restart: unless-stopped
     ports:
