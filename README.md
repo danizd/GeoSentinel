@@ -35,6 +35,7 @@ a un modelo canonico, aplica clustering espacio-temporal y los expone via API RE
 | **API Corrections** | `POST /v1/corrections` con tipos `false_positive`, `close`, `reclassify`, `relocate`, `merge`; auditoria append-only |
 | **Confianza** | Calculo ponderado por clase de independencia de fuente con penalizacion por ventana de 6h para `media_derived` |
 | **Frontend** | Dashboard React con mapa Mapbox, capas 2D/3D, panel lateral con lista de incidentes virtualizada, filtros, estado polling con TanStack Query |
+| **Radar CR360** | Página `/radar`: mapa Mapbox standalone con eventos, carreteras comprometidas y regiones de CR360 para los países configurados; iconos por tipo, distintivo de país, énfasis temporal por antigüedad, tooltips y paneles de detalle; proxy backend con caché (3 h) |
 
 ### Pendiente / Gaps conocidos
 
@@ -204,6 +205,22 @@ docker exec geosentinel-backend python -c "import urllib.request; print(urllib.r
 docker exec geosentinel-frontend wget -qO- http://localhost/ | head -1
 ```
 
+### Desplegar cambios tras un commit y push
+
+Cada vez que se hace un **commit y push** al repositorio, para actualizar
+producción hay que hacer exactamente esto en el servidor (`~/docker/GeoSentinel`):
+
+```bash
+cd ~/docker/GeoSentinel
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+> ⚠️ **No usar `docker compose up` a secas en producción**: ese comando usa
+> `docker-compose.yml` (fichero de desarrollo), que intenta levantar un postgres
+> propio en el puerto 5432 y colisiona con el postgres de producción. El despliegue
+> real es siempre con `-f docker-compose.prod.yml`.
+
 ### Nginx Proxy Manager
 
 Crear un Proxy Host en NPM:
@@ -220,6 +237,9 @@ Ver `.env.production` para la lista completa. Variables clave:
 - `DATABASE_URL`: conexion a postgres (interno Docker)
 - `VITE_MAPBOX_TOKEN`: token de Mapbox (build-time, pasar como `--build-arg`)
 - `VITE_API_BASE_URL`: vacio en produccion (same-origin)
+- `VITE_CR360_COUNTRIES`: paises del radar (ISO-3 separados por coma, p. ej. `ESP,RUS,UKR`) — build-time
+- `VITE_RADAR_TITLE`: titulo de la pagina/enlace del radar (p. ej. `Conflicto Ucrania - Rusia`) — build-time
+- `VITE_POLL_CR360_MS`: intervalo de polling del radar en ms (default `10800000` = 3 h) — build-time
 
 ### Comandos utiles
 
