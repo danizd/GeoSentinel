@@ -1,3 +1,7 @@
+# ⚠️ DEV ONLY — NO ejecutar en producción.
+# Este fichero levanta un postgres en el puerto 5432 del host y colisiona con el
+# postgres de producción (que ya ocupa ese puerto). En producción usar:
+#   docker compose -f docker-compose.prod.yml up -d --build
 services:
   postgres:
     image: postgis/postgis:16-3.4
